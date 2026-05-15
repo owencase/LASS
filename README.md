@@ -1,2 +1,1 @@
-# LASS
-gtec
+# LASS-UI
