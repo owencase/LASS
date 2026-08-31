@@ -64,6 +64,7 @@ graph TD
  ┃ ┣ 📂 ui                   # 🖥️ 사용자 인터페이스 (Streamlit)
  ┃ ┃ ┣ 📜 app.py             # 메인 웹 인터페이스 실행 파일
  ┃ ┃ ┗ 📜 components.py      # UI 컴포넌트 (업로더, 결과 출력 위젯 등)
+ ┃ ┣ 📜 pipeline.py          # STT → RAG → LLM 전체 처리 흐름 조율
  ┃ ┗ 📜 config.py            # 전역 설정 파일 (경로, 모델 파라미터 등)
  ┣ 📂 prompts                # 📝 요약 템플릿 (코드 수정 없이 요약 퀄리티 조정)
  ┃ ┣ 📜 meeting_action.yaml  # [회의용] Action Item 및 결론 위주 프롬프트
@@ -73,7 +74,9 @@ graph TD
  ┃ ┣ 📂 inputs               # 업로드된 원본 오디오 파일
  ┃ ┣ 📂 outputs              # 생성된 텍스트 및 마크다운 결과물
  ┃ ┗ 📂 vector_db            # 로컬 벡터 DB 저장소
+ ┣ 📂 tests                  # 핵심 모듈 단위 테스트
  ┣ 📜 .env.example           # 환경 변수 템플릿
+ ┣ 📜 pyproject.toml         # 프로젝트 및 패키징 설정
  ┣ 📜 requirements.txt       # 의존성 패키지 목록
  ┗ 📜 README.md              # 현재 파일
 ```
@@ -88,7 +91,7 @@ graph TD
 | :--- | :--- | :--- |
 | **UI** | `Streamlit` | 파이썬만으로 빠르게 웹 형태의 데모와 프로토타입 구축 가능 |
 | **STT** | `OpenAI Whisper` (또는 `faster-whisper`) | 로컬 구동 가능, 높은 한국어 인식률, faster-whisper 적용 시 속도 대폭 향상 |
-| **RAG** | `LangChain`, `ChromaDB`, `BGE-m3 (Embedding)` | 확장성이 뛰어난 프레임워크와 파일 기반으로 로컬에 저장하기 쉬운 DB |
+| **RAG** | `ChromaDB`, `BGE-m3 (Embedding)` | 가벼운 자체 청킹과 로컬에 저장하기 쉬운 벡터 DB 구성 |
 | **LLM** | `Ollama` + `Llama 3` (또는 `Gemma 2` 등) | 노트북 리소스를 관리하며 로컬 LLM을 띄우고 API 형태로 통신하기 가장 쉬움 |
 
 ---
@@ -96,9 +99,9 @@ graph TD
 ## 🚀 설치 및 실행 방법 (Getting Started)
 
 ### 1. 사전 요구사항 (Prerequisites)
-- Python 3.9 이상
-- [FFmpeg](https://ffmpeg.org/) 설치 (오디오 처리를 위해 필수)
-- (선택) 로컬 LLM 구동을 위한 [Ollama](https://ollama.com/) 설치
+- Python 3.9 이상 (3.10 이상 권장)
+- 로컬 LLM 구동을 위한 [Ollama](https://ollama.com/) 설치 및 실행
+- (선택) 별도 오디오 변환이 필요한 경우 [FFmpeg](https://ffmpeg.org/) 설치
 
 ### 2. 프로젝트 클론 및 환경 설정
 ```bash
@@ -108,10 +111,16 @@ cd LASS
 
 # 가상환경 생성 및 활성화
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts ctivate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # 패키지 설치
 pip install -r requirements.txt
+```
+
+Ollama를 사용하는 경우 앱 실행 전에 모델을 준비합니다.
+
+```bash
+ollama pull llama3.1:8b
 ```
 
 ### 3. 환경 변수 설정 (필요 시)
@@ -127,6 +136,14 @@ streamlit run src/ui/app.py
 ```
 
 브라우저에서 `http://localhost:8501`로 접속하여 LASS를 사용할 수 있습니다.
+
+> 첫 실행 시 Whisper 및 임베딩 모델이 로컬에 다운로드될 수 있습니다. 다운로드가 끝난 뒤에는 모델 캐시를 사용하므로 오프라인으로 실행할 수 있습니다.
+
+### 5. 기본 테스트
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ---
 
