@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><style>html,body{margin:0;height:0;overflow:hidden}</style></head>
+<body>
+<script>
+  const parentDocument = window.parent.document;
+  let contentLayout = "stack";
+  let layoutObserver = null;
+  let observedLayout = null;
+  let transcriptObserver = null;
+  let observedTranscript = null;
+  let resizeTimer = null;
+
+  function sendHeight() {
+    window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:0}, "*");
+  }
+
+  function directWrapper(layout, selector) {
+    return Array.from(layout.children).find((node) => node.querySelector(selector));
+  }
+
+  function clearCenterLayout(layout, documentPane, memoPane) {
+    layout.classList.remove("lass-center-side-by-side");
+    layout.style.removeProperty("--lass-document-width");
+    for (const pane of [documentPane, memoPane]) {
+      pane.style.removeProperty("flex");
+      pane.style.removeProperty("width");
+      pane.style.removeProperty("height");
+    }
+    layout.querySelectorAll(":scope > .lass-center-resizer").forEach((node) => node.remove());
+  }
+
+  function boundedRatio(storageKey, fallback) {
+    const saved = Number(window.localStorage.getItem(storageKey));
+    return Number.isFinite(saved) && saved >= .25 && saved <= .75 ? saved : fallback;
+  }
+
+  function installStackSplitter(layout, documentPane, memoPane) {
+    const handle = parentDocument.createElement("div");
+    handle.className = "lass-center-resizer lass-horizontal-resizer";
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "horizontal");
+    handle.setAttribute("aria-label", "PDF와 메모 높이 조절");
+    handle.innerHTML = '<span aria-hidden="true"></span>';
+    layout.insertBefore(handle, memoPane);
+
+    const available = () => Math.max(260, layout.getBoundingClientRect().height - 5);
+    const apply = (documentHeight) => {
+      const total = available();
+      const bounded = Math.max(130, Math.min(total - 130, documentHeight));
+      documentPane.style.setProperty("flex", `0 0 ${bounded}px`, "important");
+      documentPane.style.setProperty("height", `${bounded}px`, "important");
+      memoPane.style.setProperty("flex", `0 0 ${total - bounded}px`, "important");
+      memoPane.style.setProperty("height", `${total - bounded}px`, "important");
+      handle.setAttribute("aria-valuenow", String(Math.round(bounded)));
+      return bounded;
+    };
+    handle.lassApplyRatio = (ratio) => apply(available() * ratio);
+    handle.lassApplyRatio(boundedRatio("lass-document-height-ratio-v2", .62));
+
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const startY = event.clientY;
+      const startHeight = documentPane.getBoundingClientRect().height;
+      handle.classList.add("dragging");
+      handle.setPointerCapture(event.pointerId);
+      const move = (moveEvent) => apply(startHeight + moveEvent.clientY - startY);
+      const finish = () => {
+        handle.classList.remove("dragging");
+        window.localStorage.setItem(
+          "lass-document-height-ratio-v2",
+          String(documentPane.getBoundingClientRect().height / available())
+        );
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", finish);
+        handle.removeEventListener("pointercancel", finish);
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
+    });
+    handle.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      const height = apply(documentPane.getBoundingClientRect().height + (event.key === "ArrowUp" ? -16 : 16));
+      window.localStorage.setItem("lass-document-height-ratio-v2", String(height / available()));
+    });
+  }
+
+  function installSideSplitter(layout, documentPane, memoPane) {
+    layout.classList.add("lass-center-side-by-side");
+    const handle = parentDocument.createElement("div");
+    handle.className = "lass-center-resizer lass-vertical-resizer";
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", "PDF와 메모 너비 조절");
+    handle.innerHTML = '<span aria-hidden="true"></span>';
+    layout.insertBefore(handle, memoPane);
+
+    const available = () => Math.max(420, layout.getBoundingClientRect().width - 5);
+    const apply = (documentWidth) => {
+      const total = available();
+      const bounded = Math.max(240, Math.min(total - 220, documentWidth));
+      layout.style.setProperty("--lass-document-width", `${bounded}px`);
+      handle.setAttribute("aria-valuenow", String(Math.round(bounded)));
+      return bounded;
+    };
+    handle.lassApplyRatio = (ratio) => apply(available() * ratio);
+    handle.lassApplyRatio(boundedRatio("lass-document-width-ratio-v1", .62));
+
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = documentPane.getBoundingClientRect().width;
+      handle.classList.add("dragging");
+      handle.setPointerCapture(event.pointerId);
+      const move = (moveEvent) => apply(startWidth + moveEvent.clientX - startX);
+      const finish = () => {
+        handle.classList.remove("dragging");
+        window.localStorage.setItem(
+          "lass-document-width-ratio-v1",
+          String(documentPane.getBoundingClientRect().width / available())
+        );
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", finish);
+        handle.removeEventListener("pointercancel", finish);
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
+    });
+    handle.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const width = apply(documentPane.getBoundingClientRect().width + (event.key === "ArrowLeft" ? -16 : 16));
+      window.localStorage.setItem("lass-document-width-ratio-v1", String(width / available()));
+    });
+  }
+
+  function setupCenterLayout() {
+    const layout = parentDocument.querySelector(".st-key-lass-document-memo-layout");
+    if (!layout) return;
+    const documentPane = directWrapper(layout, ".st-key-lass-document-pane");
+    const memoPane = directWrapper(layout, ".st-key-lass-memo-pane");
+    if (!documentPane) return;
+    if (!memoPane) {
+      layout.classList.remove("lass-center-side-by-side");
+      layout.style.removeProperty("--lass-document-width");
+      documentPane.style.removeProperty("flex");
+      documentPane.style.removeProperty("width");
+      documentPane.style.removeProperty("height");
+      layout.querySelectorAll(":scope > .lass-center-resizer").forEach((node) => node.remove());
+      return;
+    }
+    clearCenterLayout(layout, documentPane, memoPane);
+    if (contentLayout === "side") installSideSplitter(layout, documentPane, memoPane);
+    else installStackSplitter(layout, documentPane, memoPane);
+
+    if (observedLayout !== layout) {
+      layoutObserver?.disconnect();
+      observedLayout = layout;
+      layoutObserver = new ResizeObserver(() => {
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+          const handle = layout.querySelector(":scope > .lass-center-resizer");
+          if (!handle?.lassApplyRatio) return;
+          const side = handle.classList.contains("lass-vertical-resizer");
+          handle.lassApplyRatio(boundedRatio(
+            side ? "lass-document-width-ratio-v1" : "lass-document-height-ratio-v2",
+            .62
+          ));
+        }, 100);
+      });
+      layoutObserver.observe(layout);
+    }
+  }
+
+  function setupTranscriptAutoscroll() {
+    const transcript = parentDocument.querySelector(".st-key-lass-transcript-stream");
+    if (!transcript) return;
+    transcript.scrollTop = transcript.scrollHeight;
+    if (observedTranscript === transcript) return;
+    transcriptObserver?.disconnect();
+    observedTranscript = transcript;
+    transcriptObserver = new MutationObserver(() => {
+      window.requestAnimationFrame(() => { transcript.scrollTop = transcript.scrollHeight; });
+    });
+    transcriptObserver.observe(transcript, {childList:true,subtree:true});
+  }
+
+  function setup() {
+    setupCenterLayout();
+    setupTranscriptAutoscroll();
+  }
+
+  window.addEventListener("message", (event) => {
+    if (event.data?.type !== "streamlit:render") return;
+    contentLayout = event.data.args?.content_layout === "side" ? "side" : "stack";
+    sendHeight();
+    window.setTimeout(setup, 0);
+    window.setTimeout(setupTranscriptAutoscroll, 120);
+  });
+  window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:componentReady",apiVersion:1}, "*");
+  sendHeight();
+  setup();
+</script>
+</body>
+</html>

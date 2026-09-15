@@ -32,6 +32,8 @@ htmlcov/
 # Build / packaging output
 build/
 dist/
+LASS.app/
+LASS.exe
 develop-eggs/
 downloads/
 eggs/
@@ -49,16 +51,16 @@ MANIFEST
 pip-wheel-metadata/
 __pypackages__/
 
-# Runtime data (keep directory placeholders only)
-/data/inputs/*
-/data/outputs/*
-/data/vector_db/*
-!/data/inputs/.gitkeep
-!/data/outputs/.gitkeep
-!/data/vector_db/.gitkeep
+# Runtime databases
+/data/*
 
 # Downloaded local AI models and checkpoints
-/models/
+/models/*
+!/models/README.md
+!/models/exaone-4.0-1.2b/
+/models/exaone-4.0-1.2b/*
+!/models/exaone-4.0-1.2b/.gitkeep
+!/models/exaone-4.0-1.2b/lass-model-manifest.json
 /checkpoints/
 *.ckpt
 *.pt

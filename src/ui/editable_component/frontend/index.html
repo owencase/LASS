@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel: #12151a;
+      --panel-2: #191d24;
+      --line: rgba(226,232,240,.14);
+      --text: #f5f7fa;
+      --muted: #a7b0bf;
+      --accent: #76a9ff;
+      --accent-ink: #07111f;
+      --violet: #b6a7ff;
+      --hover: #222832;
+      --field: #0f1217;
+      --code: #090b0f;
+      --scale: 1;
+    }
+    :root[data-theme="light"] {
+      color-scheme: light; --panel:#fff; --panel-2:#f7f8fa; --line:#e2e8f0;
+      --text:#1e293b; --muted:#64748b; --accent:#2563eb; --accent-ink:#fff;
+      --violet:#7c3aed; --field:#fff; --code:#f1f5f9;
+      --hover:#eef2f7;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; color: var(--text); background: transparent; font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:calc(16px * var(--scale)); }
+    body { overflow: hidden; opacity:0; }
+    body.ready { opacity:1; }
+    #app { width: 100%; }
+    .edit-hint { margin: 0 0 8px 4px; color: var(--muted); font-size: 11px; }
+    .summary-view, .empty {
+      min-height: 180px; padding: 20px 22px; border: 1px solid var(--line);
+      border-radius: 13px; background: var(--panel); cursor: text;
+    }
+    .summary-view:hover, .row:hover { border-color:var(--accent); background:var(--hover); }
+    .summary-view h1, .summary-view h2, .summary-view h3 { margin: 1em 0 .45em; line-height: 1.3; }
+    .summary-view h1:first-child, .summary-view h2:first-child, .summary-view h3:first-child { margin-top: 0; }
+    .summary-view h1 { font-size: 22px; } .summary-view h2 { font-size: 18px; } .summary-view h3 { font-size: 15px; }
+    .summary-view p { margin: .45em 0; color: var(--text); font-size: 14px; line-height: 1.72; }
+    .summary-view ul, .summary-view ol { margin: .35em 0 .7em; padding-left: 22px; }
+    .summary-view li { margin: .28em 0; color: var(--text); font-size: 14px; line-height: 1.6; }
+    .summary-view strong { color: var(--text); } .summary-view code { color: var(--accent); background: var(--code); padding: 2px 5px; border-radius: 4px; }
+    .summary-view pre { overflow:auto; padding:12px; border-radius:8px; background:var(--code); }
+    .summary-view pre code { padding:0; color:var(--text); background:transparent; }
+    .summary-view blockquote { margin:.7em 0; padding:.15em 1em; border-left:3px solid var(--violet); color:var(--muted); }
+    .summary-view blockquote p { color:var(--muted); }
+    .summary-view a { color:var(--violet); text-underline-offset:2px; }
+    .summary-view hr { border:0; border-top:1px solid var(--line); margin:1.2em 0; }
+    .summary-view table { width:100%; margin:.8em 0; border-collapse:collapse; font-size:13px; }
+    .summary-view th, .summary-view td { padding:8px 10px; border:1px solid var(--line); text-align:left; }
+    .summary-view th { background:var(--panel-2); }
+    .empty { display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; white-space: pre-line; }
+    .editor { padding: 12px; border: 1px solid rgba(168,146,255,.35); border-radius: 13px; background: var(--panel); }
+    textarea, input {
+      width: 100%; border: 1px solid var(--line); border-radius: 8px;
+      color: var(--text); background: var(--field); font: inherit; outline: none;
+    }
+    textarea:focus, input:focus { border-color: var(--accent); }
+    textarea { min-height: 340px; padding: 13px; resize: vertical; font-size: 13px; line-height: 1.65; }
+    .actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 9px; }
+    button { padding: 7px 13px; border: 1px solid var(--line); border-radius: 7px; color: var(--text); background: var(--panel-2); font: inherit; font-size: 12px; cursor: pointer; }
+    button:hover { border-color:var(--accent); color:var(--text); background:var(--hover); }
+    button.primary { border: 0; color: var(--accent-ink); background: var(--accent); font-weight: 750; }
+    button.primary:hover { border:0; color:var(--accent-ink); background:var(--accent); filter:brightness(1.08); }
+    .timeline { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); scrollbar-width: thin; scrollbar-color: #363d4b transparent; }
+    .row { display: grid; grid-template-columns: 98px minmax(0,1fr); gap: 14px; padding: 12px 15px; border: 1px solid transparent; border-bottom-color: rgba(255,255,255,.055); cursor: text; }
+    .row:last-child { border-bottom-color: transparent; }
+    .time { color: var(--accent); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.55; }
+    .time span { display: block; color: #737c8c; font-size: 9px; }
+    .speech { color: var(--text); font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+    .segment-editor { padding: 13px 15px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+    .time-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .time-inputs label { color: var(--muted); font-size: 10px; }
+    .time-inputs input { margin-top: 4px; padding: 8px; color: var(--accent); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .segment-editor textarea { min-height: 96px; }
+    .memo-editor { display:flex; flex-direction:column; height:100vh; min-height:120px; background:var(--panel); }
+    .memo-toolbar { display:flex; flex:0 0 40px; align-items:center; gap:3px; padding:4px 8px; border-bottom:1px solid var(--line); background:var(--panel-2); }
+    .memo-toolbar button { min-width:32px; height:30px; padding:0 8px; border:0; background:transparent; font-weight:650; }
+    .memo-toolbar button:hover { border:0; background:var(--hover); }
+    .memo-toolbar .memo-status { margin-left:auto; color:var(--muted); font-size:10px; font-weight:600; }
+    .memo-toolbar .memo-status.saving { color:var(--accent); }
+    .memo-field { flex:1 1 0; min-height:0; padding:14px 16px; border:0; border-radius:0; background:transparent; resize:none; font-size:13px; line-height:1.65; }
+    .memo-field:focus { border:0; outline:0; box-shadow:none; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const app = document.getElementById("app");
+    let state = { mode: "summary", text: "", segments: [], theme_mode: "dark", text_scale: 100, height: 180 };
+    let editing = null;
+    let contentSignature = "";
+    let memoTimer = null;
+
+    function post(action, payload = {}) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setComponentValue",
+        value: { action, nonce: `${Date.now()}-${Math.random()}`, ...payload }
+      }, "*");
+    }
+
+    function resize() {
+      const height = state.mode === "memo"
+        ? Math.max(120, Number(state.height) || 180)
+        : Math.max(120, Math.ceil(app.scrollHeight + 4));
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height
+      }, "*");
+    }
+
+    function appendInline(element, source) {
+      const pattern = /(`[^`]+`|\*\*[^*]+\*\*|~~[^~]+~~|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+      let cursor = 0;
+      for (const match of source.matchAll(pattern)) {
+        if (match.index > cursor) element.append(document.createTextNode(source.slice(cursor, match.index)));
+        const token = match[0];
+        let child;
+        if (token.startsWith("`")) child = document.createElement("code");
+        else if (token.startsWith("**")) child = document.createElement("strong");
+        else if (token.startsWith("~~")) child = document.createElement("s");
+        else if (token.startsWith("[")) {
+          const parts = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+          child = document.createElement("a"); child.textContent = parts[1]; child.href = parts[2];
+          child.target = "_blank"; child.rel = "noopener noreferrer";
+          element.append(child); cursor = match.index + token.length; continue;
+        } else child = document.createElement("em");
+        child.textContent = token.startsWith("**") || token.startsWith("~~") ? token.slice(2, -2) : token.slice(1, -1);
+        element.append(child);
+        cursor = match.index + token.length;
+      }
+      if (cursor < source.length) element.append(document.createTextNode(source.slice(cursor)));
+    }
+
+    function markdownView(text) {
+      const view = document.createElement("div");
+      view.className = "summary-view";
+      const lines = text.replace(/\r\n?/g, "\n").split("\n");
+      let list = null;
+      let index = 0;
+      while (index < lines.length) {
+        const line = lines[index];
+        if (/^\s*```/.test(line)) {
+          list = null; const pre = document.createElement("pre"); const code = document.createElement("code");
+          const contents = []; index += 1;
+          while (index < lines.length && !/^\s*```/.test(lines[index])) contents.push(lines[index++]);
+          code.textContent = contents.join("\n"); pre.append(code); view.append(pre); index += 1; continue;
+        }
+        if (line.includes("|") && index + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[index + 1])) {
+          list = null; const table = document.createElement("table");
+          const split = (value) => value.replace(/^\s*\||\|\s*$/g, "").split("|").map((cell) => cell.trim());
+          const header = document.createElement("tr"); split(line).forEach((cell) => { const th=document.createElement("th"); appendInline(th, cell); header.append(th); });
+          const head = document.createElement("thead"); head.append(header); table.append(head); index += 2;
+          const body = document.createElement("tbody");
+          while (index < lines.length && lines[index].includes("|") && lines[index].trim()) {
+            const row=document.createElement("tr"); split(lines[index]).forEach((cell) => { const td=document.createElement("td"); appendInline(td, cell); row.append(td); }); body.append(row); index += 1;
+          }
+          table.append(body); view.append(table); continue;
+        }
+        const heading = line.match(/^\s*(#{1,6})\s+(.*)$/);
+        if (heading) {
+          list = null;
+          const node = document.createElement(`h${heading[1].length}`);
+          appendInline(node, heading[2]);
+          view.append(node);
+        } else if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+          const ordered = /^\s*\d+\./.test(line);
+          if (!list || (list.tagName === "OL") !== ordered) { list = document.createElement(ordered ? "ol" : "ul"); view.append(list); }
+          const node = document.createElement("li");
+          appendInline(node, line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, ""));
+          list.append(node);
+        } else if (/^\s*>\s?/.test(line)) {
+          list = null; const quote=document.createElement("blockquote"); const node=document.createElement("p"); appendInline(node, line.replace(/^\s*>\s?/, "")); quote.append(node); view.append(quote);
+        } else if (/^\s*(?:---+|\*\*\*+)\s*$/.test(line)) {
+          list = null; view.append(document.createElement("hr"));
+        } else if (line.trim()) {
+          list = null;
+          const node = document.createElement("p");
+          appendInline(node, line);
+          view.append(node);
+        } else {
+          list = null;
+        }
+        index += 1;
+      }
+      return view;
+    }
+
+    function actionButton(label, callback, primary = false) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      if (primary) button.className = "primary";
+      button.addEventListener("click", callback);
+      return button;
+    }
+
+    function showSummaryEditor() {
+      editing = "summary";
+      app.innerHTML = "";
+      const editor = document.createElement("div");
+      editor.className = "editor";
+      const field = document.createElement("textarea");
+      field.value = state.text || "";
+      field.placeholder = "요약을 입력하세요.";
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actions.append(
+        actionButton("취소", () => { editing = null; render(); }),
+        actionButton("저장", () => {
+          state.text = field.value;
+          editing = null;
+          contentSignature = JSON.stringify([state.mode, state.text, state.segments]);
+          post("save_summary", { text: field.value });
+          render();
+        }, true)
+      );
+      field.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          event.preventDefault();
+          state.text = field.value;
+          editing = null;
+          contentSignature = JSON.stringify([state.mode, state.text, state.segments]);
+          post("save_summary", { text: field.value });
+          render();
+        }
+      });
+      editor.append(field, actions);
+      app.append(editor);
+      field.focus();
+      resize();
+    }
+
+    function renderSummary() {
+      const hint = document.createElement("div");
+      hint.className = "edit-hint";
+      hint.textContent = "요약을 더블클릭하면 바로 수정할 수 있습니다.";
+      const view = state.text ? markdownView(state.text) : document.createElement("div");
+      if (!state.text) {
+        view.className = "empty";
+        view.textContent = "아직 생성된 요약이 없습니다.\n더블클릭하여 직접 작성할 수 있습니다.";
+      }
+      view.addEventListener("dblclick", showSummaryEditor);
+      app.append(hint, view);
+    }
+
+    function formatTime(seconds) {
+      const total = Math.max(0, Math.floor(Number(seconds) || 0));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+      return [hours, minutes, secs].map((value) => String(value).padStart(2, "0")).join(":");
+    }
+
+    function parseTime(value) {
+      const pieces = value.trim().split(":").map(Number);
+      if (pieces.some((item) => !Number.isFinite(item) || item < 0)) return null;
+      if (pieces.length === 3) return pieces[0] * 3600 + pieces[1] * 60 + pieces[2];
+      if (pieces.length === 2) return pieces[0] * 60 + pieces[1];
+      if (pieces.length === 1) return pieces[0];
+      return null;
+    }
+
+    function showSegmentEditor(index) {
+      editing = `segment-${index}`;
+      const rows = app.querySelectorAll(".row, .segment-editor");
+      const target = rows[index];
+      const segment = state.segments[index];
+      const editor = document.createElement("div");
+      editor.className = "segment-editor";
+      const times = document.createElement("div");
+      times.className = "time-inputs";
+      const startLabel = document.createElement("label");
+      startLabel.textContent = "시작 시각";
+      const startInput = document.createElement("input");
+      startInput.value = formatTime(segment.start);
+      startLabel.append(startInput);
+      const endLabel = document.createElement("label");
+      endLabel.textContent = "종료 시각";
+      const endInput = document.createElement("input");
+      endInput.value = formatTime(segment.end);
+      endLabel.append(endInput);
+      times.append(startLabel, endLabel);
+      const field = document.createElement("textarea");
+      field.value = segment.text;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actions.append(
+        actionButton("취소", () => { editing = null; render(); }),
+        actionButton("저장", () => {
+          const start = parseTime(startInput.value);
+          const end = parseTime(endInput.value);
+          const text = field.value.trim();
+          if (start === null || end === null || end < start || !text) {
+            window.alert("시각과 녹취 내용을 올바르게 입력해 주세요.");
+            return;
+          }
+          state.segments[index] = { start, end, text };
+          editing = null;
+          contentSignature = JSON.stringify([state.mode, state.text, state.segments]);
+          post("save_segment", { index, start, end, text });
+          render();
+        }, true)
+      );
+      editor.append(times, field, actions);
+      target.replaceWith(editor);
+      field.focus();
+      resize();
+    }
+
+    function renderTranscript() {
+      const hint = document.createElement("div");
+      hint.className = "edit-hint";
+      hint.textContent = "수정할 타임스탬프 행을 더블클릭하세요.";
+      app.append(hint);
+      if (!state.segments.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "아직 녹취가 없습니다.";
+        app.append(empty);
+        return;
+      }
+      const timeline = document.createElement("div");
+      timeline.className = "timeline";
+      state.segments.forEach((segment, index) => {
+        const row = document.createElement("div");
+        row.className = "row";
+        const time = document.createElement("div");
+        time.className = "time";
+        time.textContent = formatTime(segment.start);
+        const end = document.createElement("span");
+        end.textContent = `→ ${formatTime(segment.end)}`;
+        time.append(end);
+        const speech = document.createElement("div");
+        speech.className = "speech";
+        speech.textContent = segment.text;
+        row.append(time, speech);
+        row.addEventListener("dblclick", () => showSegmentEditor(index));
+        timeline.append(row);
+      });
+      app.append(timeline);
+    }
+
+    function renderMemo() {
+      const editor = document.createElement("div");
+      editor.className = "memo-editor";
+      editor.style.setProperty("--memo-height", `${Math.max(120, Number(state.height) || 180)}px`);
+      const toolbar = document.createElement("div");
+      toolbar.className = "memo-toolbar";
+      const field = document.createElement("textarea");
+      field.className = "memo-field";
+      field.value = state.text || "";
+      field.placeholder = "개인 메모를 입력하세요…";
+      const status = document.createElement("span");
+      status.className = "memo-status";
+      status.textContent = "자동 저장됨";
+
+      const replaceSelection = (before, after, fallback) => {
+        const start = field.selectionStart;
+        const end = field.selectionEnd;
+        const selected = field.value.slice(start, end) || fallback;
+        field.setRangeText(`${before}${selected}${after}`, start, end, "end");
+        field.dispatchEvent(new Event("input"));
+        field.focus();
+      };
+      const prefixLines = (prefix) => {
+        const start = field.value.lastIndexOf("\n", Math.max(0, field.selectionStart - 1)) + 1;
+        const nextBreak = field.value.indexOf("\n", field.selectionEnd);
+        const end = nextBreak < 0 ? field.value.length : nextBreak;
+        const selected = field.value.slice(start, end) || "항목";
+        field.setRangeText(selected.split("\n").map((line) => `${prefix}${line}`).join("\n"), start, end, "end");
+        field.dispatchEvent(new Event("input"));
+        field.focus();
+      };
+      const tool = (label, title, callback) => {
+        const button = actionButton(label, callback);
+        button.title = title;
+        button.setAttribute("aria-label", title);
+        button.addEventListener("pointerdown", (event) => event.preventDefault());
+        toolbar.append(button);
+      };
+      tool("B", "굵게", () => replaceSelection("**", "**", "굵은 글씨"));
+      tool("I", "기울임", () => replaceSelection("*", "*", "기울임 글씨"));
+      tool("•", "글머리 목록", () => prefixLines("- "));
+      tool("☑", "체크 목록", () => prefixLines("- [ ] "));
+      tool("↗", "링크", () => replaceSelection("[", "](https://)", "링크 이름"));
+      toolbar.append(status);
+
+      field.addEventListener("input", () => {
+        state.text = field.value;
+        status.textContent = "저장 중…";
+        status.classList.add("saving");
+        window.clearTimeout(memoTimer);
+        memoTimer = window.setTimeout(() => {
+          contentSignature = JSON.stringify([state.mode, state.text, state.segments]);
+          post("save_memo", { text: state.text });
+          status.textContent = "자동 저장됨";
+          status.classList.remove("saving");
+        }, 600);
+      });
+      editor.append(toolbar, field);
+      app.append(editor);
+    }
+
+    function render() {
+      app.innerHTML = "";
+      if (state.mode === "transcript") renderTranscript();
+      else if (state.mode === "memo") renderMemo();
+      else renderSummary();
+      requestAnimationFrame(resize);
+      document.body.classList.add("ready");
+    }
+
+    function applyAppearance(next) {
+      document.documentElement.dataset.theme = next.theme_mode === "light" ? "light" : "dark";
+      const scale = Math.min(120, Math.max(90, Number(next.text_scale) || 100));
+      document.documentElement.style.setProperty("--scale", String(scale / 100));
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.data.type !== "streamlit:render") return;
+      const next = event.data.args || state;
+      applyAppearance(next);
+      const nextSignature = JSON.stringify([next.mode, next.text, next.segments]);
+      if (nextSignature === contentSignature) {
+        state = next;
+        document.body.classList.add("ready");
+        resize();
+        return;
+      }
+      state = next;
+      contentSignature = nextSignature;
+      editing = null;
+      render();
+    });
+    new ResizeObserver(resize).observe(app);
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:componentReady",
+      apiVersion: 1
+    }, "*");
+    resize();
+  </script>
+</body>
+</html>

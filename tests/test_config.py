@@ -8,6 +8,12 @@ from src.config import Settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_default_llm_budget_is_low_memory(self) -> None:
+        settings = Settings()
+
+        self.assertEqual(settings.exaone_max_input_tokens, 2048)
+        self.assertEqual(settings.exaone_max_new_tokens, 384)
+
     def test_loads_dotenv_and_creates_runtime_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -17,6 +23,9 @@ class SettingsTests(unittest.TestCase):
                     [
                         f"LASS_PROJECT_ROOT={root}",
                         "LASS_WHISPER_MODEL=base",
+                        "LASS_STT_TARGET_LUFS=-18",
+                        f"LASS_EXAONE_MODEL_DIR={root / 'models' / 'exaone'}",
+                        "LASS_EXAONE_MAX_NEW_TOKENS=512",
                         "LASS_CHUNK_SIZE=500",
                         "LASS_CHUNK_OVERLAP=50",
                     ]
@@ -29,10 +38,21 @@ class SettingsTests(unittest.TestCase):
             settings.ensure_directories()
 
             self.assertEqual(settings.whisper_model, "base")
+            self.assertEqual(settings.stt_target_lufs, -18.0)
+            self.assertEqual(settings.exaone_max_new_tokens, 512)
+            self.assertEqual(
+                settings.exaone_model_dir, (root / "models" / "exaone").resolve()
+            )
             self.assertEqual(settings.chunk_size, 500)
-            self.assertTrue(settings.input_dir.is_dir())
-            self.assertTrue(settings.output_dir.is_dir())
-            self.assertTrue(settings.vector_db_dir.is_dir())
+            self.assertTrue(settings.data_dir.is_dir())
+            self.assertTrue(settings.exaone_model_dir.is_dir())
+            self.assertEqual(
+                settings.database_path, (root / "data" / "lass.db").resolve()
+            )
+            self.assertEqual(
+                settings.vector_database_path,
+                (root / "data" / "vectors.db").resolve(),
+            )
 
     def test_rejects_overlap_larger_than_chunk(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

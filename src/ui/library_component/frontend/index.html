@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d10;
+      --panel: #12151a;
+      --hover: #222832;
+      --selected: rgba(118,169,255,.12);
+      --line: rgba(226,232,240,.14);
+      --text: #f5f7fa;
+      --muted: #a7b0bf;
+      --accent: #76a9ff;
+      --violet: #b6a7ff;
+      --danger: #ff8a98;
+      --scale: 1;
+    }
+    :root[data-theme="light"] {
+      color-scheme:light; --bg:#eef0f3; --panel:#fff; --hover:#eef2f7;
+      --selected:#eff6ff; --line:#e2e8f0; --text:#1e293b;
+      --muted:#64748b; --accent:#2563eb; --violet:#7c3aed; --danger:#dc2626;
+    }
+    * { box-sizing: border-box; }
+    html, body { width:100%; height:100%; min-height:0; margin:0; overflow:hidden; color:var(--text); background:transparent; font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:calc(16px * var(--scale)); }
+    #app { display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden; }
+    .hint { display:none; }
+    .tree { flex:1 1 0; min-height:0; overflow:auto; padding-right:3px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
+    .folder { margin-bottom: 4px; }
+    .folder-row, .note-row {
+      width: 100%; display: flex; align-items: center; min-width: 0;
+      border: 1px solid transparent; border-radius: 8px; cursor: default;
+      user-select: none; transition: background .12s ease, border-color .12s ease;
+    }
+    .folder-row { height: 36px; padding: 0 8px; color: var(--text); font-size: 13px; font-weight: 650; }
+    .folder-row:hover, .note-row:hover { background: var(--hover); }
+    .folder-row.selected-folder { color: var(--text); border-color: rgba(168,146,255,.28); background: rgba(168,146,255,.11); }
+    .chevron { width: 18px; color: var(--muted); font-size: 10px; transition: transform .15s ease; }
+    .folder.open .chevron { transform: rotate(90deg); }
+    .folder-icon { margin-right: 7px; color: var(--violet, #7d65db); font-size: 14px; }
+    .folder-name, .note-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .count { margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 500; }
+    .folder-notes { display: none; padding-left: 18px; }
+    .folder.open .folder-notes { display: block; }
+    .note-row { min-height: 52px; margin-bottom:4px; padding: 7px 9px; color: var(--text); border-color:color-mix(in srgb,var(--line) 62%,transparent); background:var(--panel); font-size: 12px; }
+    .note-row.selected { color: var(--text); border-color: color-mix(in srgb, var(--accent) 30%, transparent); background: var(--selected); }
+    .note-icon { width: 18px; flex: 0 0 18px; color: var(--muted); font-size: 12px; }
+    .note-row.selected .note-icon { color: var(--accent); }
+    .note-copy { min-width: 0; }
+    .note-title { display: block; line-height: 1.25; }
+    .note-meta { display: block; overflow: hidden; margin-top: 2px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .empty { padding: 28px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: center; white-space: pre-line; }
+    .menu {
+      position: fixed; z-index: 50; display: none; min-width: 170px; padding: 5px;
+      border: 1px solid var(--line); border-radius: 9px;
+      background: var(--panel); box-shadow: 0 16px 38px rgba(0,0,0,.24);
+    }
+    .menu.visible { display: block; }
+    .menu-title { padding: 7px 9px 5px; color: var(--muted); font-size: 10px; }
+    .menu button {
+      width: 100%; padding: 8px 9px; border: 0; border-radius: 6px;
+      color: var(--text); background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+    }
+    .menu button:hover { background: var(--hover); }
+    .menu button.danger { color: var(--danger); }
+    .menu-separator { height: 1px; margin: 4px; background: var(--line); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="menu" class="menu"></div>
+  <script>
+    const app = document.getElementById("app");
+    const menu = document.getElementById("menu");
+    let state = { folders: [], notes: [], selected_id: null, selected_folder_id: null, theme_mode: "dark", text_scale: 100 };
+    const expanded = new Set();
+    let initialized = false;
+
+    function post(type, payload = {}) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setComponentValue",
+        value: { action: type, nonce: `${Date.now()}-${Math.random()}`, ...payload }
+      }, "*");
+    }
+
+    function setHeight(height = 650) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height
+      }, "*");
+    }
+
+    function button(label, callback, className = "") {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.textContent = label;
+      element.className = className;
+      element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        hideMenu();
+        callback();
+      });
+      return element;
+    }
+
+    function showMenu(event, kind, item) {
+      event.preventDefault();
+      event.stopPropagation();
+      menu.innerHTML = "";
+      const title = document.createElement("div");
+      title.className = "menu-title";
+      title.textContent = item.name || item.title;
+      menu.appendChild(title);
+
+      if (kind === "folder") {
+        menu.appendChild(button("이름 변경", () => {
+          const name = window.prompt("폴더 이름", item.name);
+          if (name && name.trim() && name.trim() !== item.name) {
+            post("rename_folder", { folder_id: item.id, name: name.trim() });
+          }
+        }));
+        menu.appendChild(button("폴더 삭제", () => {
+          if (window.confirm(`'${item.name}' 폴더를 삭제할까요?\n안의 노트는 미분류로 이동합니다.`)) {
+            post("delete_folder", { folder_id: item.id });
+          }
+        }, "danger"));
+      } else {
+        menu.appendChild(button("이름 변경", () => {
+          const name = window.prompt("노트 이름", item.title);
+          if (name && name.trim() && name.trim() !== item.title) {
+            post("rename_note", { note_id: item.id, name: name.trim() });
+          }
+        }));
+        menu.appendChild(button("폴더로 이동  ›", () => showMoveMenu(event, item)));
+        const separator = document.createElement("div");
+        separator.className = "menu-separator";
+        menu.appendChild(separator);
+        menu.appendChild(button("노트 삭제", () => {
+          if (window.confirm(`'${item.title}' 노트를 삭제할까요?\n녹음, 요약, 녹취, 메모가 모두 삭제됩니다.`)) {
+            post("delete_note", { note_id: item.id });
+          }
+        }, "danger"));
+      }
+      positionMenu(event.clientX, event.clientY);
+    }
+
+    function showMoveMenu(event, note) {
+      menu.innerHTML = "";
+      const title = document.createElement("div");
+      title.className = "menu-title";
+      title.textContent = "이동할 폴더";
+      menu.appendChild(title);
+      menu.appendChild(button("미분류", () => post("move_note", { note_id: note.id, folder_id: null })));
+      state.folders.forEach((folder) => {
+        menu.appendChild(button(folder.name, () => post("move_note", { note_id: note.id, folder_id: folder.id })));
+      });
+      positionMenu(event.clientX, event.clientY);
+    }
+
+    function positionMenu(x, y) {
+      menu.classList.add("visible");
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - width - 4))}px`;
+      menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - height - 4))}px`;
+    }
+
+    function hideMenu() { menu.classList.remove("visible"); }
+
+    function noteRow(note) {
+      const row = document.createElement("div");
+      row.className = `note-row${note.id === state.selected_id ? " selected" : ""}`;
+      row.title = `${note.title}\n${note.source_name}`;
+      const icon = document.createElement("span");
+      icon.className = "note-icon";
+      icon.textContent = "▤";
+      const copy = document.createElement("span");
+      copy.className = "note-copy";
+      const title = document.createElement("span");
+      title.className = "note-title";
+      title.textContent = note.title;
+      const meta = document.createElement("span");
+      meta.className = "note-meta";
+      meta.textContent = note.status === "ready" ? (note.source_name || "정리 완료") : ({draft:"작성 중", processing:"처리 중", failed:"처리 실패"}[note.status] || note.status);
+      copy.append(title, meta);
+      row.append(icon, copy);
+      row.addEventListener("click", () => post("select_note", { note_id: note.id }));
+      row.addEventListener("contextmenu", (event) => showMenu(event, "note", note));
+      return row;
+    }
+
+    function folderBlock(folder, notes) {
+      const block = document.createElement("div");
+      block.className = `folder${expanded.has(folder.id) ? " open" : ""}`;
+      const row = document.createElement("div");
+      row.className = `folder-row${folder.id === state.selected_folder_id ? " selected-folder" : ""}`;
+      const chevron = document.createElement("span");
+      chevron.className = "chevron";
+      chevron.textContent = "▶";
+      const icon = document.createElement("span");
+      icon.className = "folder-icon";
+      icon.textContent = "▰";
+      const name = document.createElement("span");
+      name.className = "folder-name";
+      name.textContent = folder.name;
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = notes.length;
+      row.append(chevron, icon, name, count);
+      chevron.addEventListener("click", (event) => {
+        event.stopPropagation();
+        expanded.has(folder.id) ? expanded.delete(folder.id) : expanded.add(folder.id);
+        render();
+      });
+      row.addEventListener("click", () => {
+        if (folder.id === "__unfiled__") {
+          expanded.has(folder.id) ? expanded.delete(folder.id) : expanded.add(folder.id);
+          render();
+        } else {
+          post("select_folder", { folder_id: folder.id });
+        }
+      });
+      if (folder.id !== "__unfiled__") {
+        row.addEventListener("contextmenu", (event) => showMenu(event, "folder", folder));
+      }
+      const children = document.createElement("div");
+      children.className = "folder-notes";
+      notes.forEach((note) => children.appendChild(noteRow(note)));
+      block.append(row, children);
+      return block;
+    }
+
+    function render() {
+      app.innerHTML = "";
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "항목을 우클릭하면 관리 메뉴가 열립니다.";
+      app.appendChild(hint);
+      const tree = document.createElement("div");
+      tree.className = "tree";
+      const assigned = new Set();
+      state.folders.forEach((folder) => {
+        const notes = state.notes.filter((note) => note.folder_id === folder.id);
+        notes.forEach((note) => assigned.add(note.id));
+        tree.appendChild(folderBlock(folder, notes));
+      });
+      const unfiled = state.notes.filter((note) => !assigned.has(note.id));
+      if (unfiled.length) {
+        tree.appendChild(folderBlock({ id: "__unfiled__", name: "미분류" }, unfiled));
+      }
+      if (!state.folders.length && !state.notes.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "아직 노트가 없습니다.\n새 노트를 추가해 시작하세요.";
+        tree.appendChild(empty);
+      }
+      app.appendChild(tree);
+      setHeight(650);
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.data.type !== "streamlit:render") return;
+      state = event.data.args || state;
+      document.documentElement.dataset.theme = state.theme_mode === "light" ? "light" : "dark";
+      const scale = Math.min(120, Math.max(90, Number(state.text_scale) || 100));
+      document.documentElement.style.setProperty("--scale", String(scale / 100));
+      if (!initialized) {
+        state.folders.forEach((folder) => expanded.add(folder.id));
+        expanded.add("__unfiled__");
+        initialized = true;
+      }
+      render();
+    });
+    window.addEventListener("click", hideMenu);
+    window.addEventListener("blur", hideMenu);
+    window.addEventListener("keydown", (event) => { if (event.key === "Escape") hideMenu(); });
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:componentReady",
+      apiVersion: 1
+    }, "*");
+    setHeight(650);
+  </script>
+</body>
+</html>

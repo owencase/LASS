@@ -1,6 +1,6 @@
 import unittest
 
-from src.rag.chunker import split_text
+from src.rag.chunker import iter_text_chunks, split_text
 
 
 class SplitTextTests(unittest.TestCase):
@@ -19,6 +19,16 @@ class SplitTextTests(unittest.TestCase):
     def test_invalid_overlap_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             split_text("text", chunk_size=10, overlap=10)
+
+    def test_iterator_yields_the_same_chunks_without_a_materialized_list(self) -> None:
+        text = "가나다라마바사. " * 20
+        streamed = iter_text_chunks(text, chunk_size=45, overlap=5)
+
+        self.assertFalse(isinstance(streamed, list))
+        self.assertEqual(
+            list(streamed),
+            split_text(text, chunk_size=45, overlap=5),
+        )
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import Iterator, List
 
 
 @dataclass(frozen=True)
@@ -22,33 +22,44 @@ def _natural_break(text: str, start: int, limit: int, minimum: int) -> int:
     return limit
 
 
-def split_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> List[TextChunk]:
-    """Split text near natural boundaries while retaining a small overlap."""
+def iter_text_chunks(
+    text: str, chunk_size: int = 1200, overlap: int = 150
+) -> Iterator[TextChunk]:
+    """Yield natural text windows without retaining a document-sized chunk list."""
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than zero")
     if overlap < 0 or overlap >= chunk_size:
         raise ValueError("overlap must be between 0 and chunk_size - 1")
 
-    normalized = text.strip()
-    if not normalized:
-        return []
+    text_length = len(text)
+    first = 0
+    while first < text_length and text[first].isspace():
+        first += 1
+    last = text_length
+    while last > first and text[last - 1].isspace():
+        last -= 1
+    if first >= last:
+        return
 
-    chunks: List[TextChunk] = []
-    start = 0
-    text_length = len(normalized)
-    while start < text_length:
-        limit = min(start + chunk_size, text_length)
+    index = 0
+    start = first
+    while start < last:
+        limit = min(start + chunk_size, last)
         end = limit
-        if limit < text_length:
+        if limit < last:
             minimum = start + max(chunk_size // 2, 1)
-            end = _natural_break(normalized, start, limit, minimum)
+            end = _natural_break(text, start, limit, minimum)
 
-        raw_chunk = normalized[start:end]
+        raw_chunk = text[start:end]
         content = raw_chunk.strip()
         if content:
-            chunks.append(TextChunk(len(chunks), content, start, end))
-        if end >= text_length:
+            yield TextChunk(index, content, start, end)
+            index += 1
+        if end >= last:
             break
         start = max(end - overlap, start + 1)
 
-    return chunks
+
+def split_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> List[TextChunk]:
+    """Compatibility wrapper for callers that explicitly need a materialized list."""
+    return list(iter_text_chunks(text, chunk_size=chunk_size, overlap=overlap))
