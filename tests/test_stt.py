@@ -1,8 +1,11 @@
 import tempfile
+import time
 import unittest
 import wave
 from array import array
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -209,6 +212,29 @@ class WhisperTranscriberTests(unittest.TestCase):
 
 
 class SenseVoiceTranscriberTests(unittest.TestCase):
+    def test_model_initialization_is_serialized_across_instances(self) -> None:
+        counter_lock = Lock()
+        active = 0
+        maximum_active = 0
+
+        def build_model(**_options):
+            nonlocal active, maximum_active
+            with counter_lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+            time.sleep(0.05)
+            with counter_lock:
+                active -= 1
+            return Mock()
+
+        transcribers = [SenseVoiceTranscriber(), SenseVoiceTranscriber()]
+        with patch("funasr.AutoModel", side_effect=build_model):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                models = list(executor.map(lambda item: item._get_model(), transcribers))
+
+        self.assertEqual(len(models), 2)
+        self.assertEqual(maximum_active, 1)
+
     def test_factory_selects_sensevoice_without_removing_whisper(self) -> None:
         sensevoice = create_transcriber(
             backend="sensevoice",
@@ -288,6 +314,30 @@ class SenseVoiceTranscriberTests(unittest.TestCase):
                     RuntimeError, "음성을 찾지 못했습니다"
                 ):
                     transcriber.transcribe(source, language="ko")
+
+    def test_retries_audible_input_without_vad_when_vad_returns_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "speech.wav"
+            with wave.open(str(source), "wb") as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(16000)
+                output.writeframes(b"\x01\x00" * 32000)
+            model = Mock()
+            model.generate.return_value = [{"text": "", "sentence_info": []}]
+            model.inference.return_value = [
+                {"text": "<|ko|><|NEUTRAL|><|Speech|>다시 인식한 문장"}
+            ]
+            transcriber = SenseVoiceTranscriber()
+            transcriber._model = model
+            prepared = AudioEnhancement(source, 1.0, -30.0, -30.0, 1)
+
+            with patch("src.stt.sensevoice.prepared_speech_audio") as prepare_audio:
+                prepare_audio.return_value.__enter__.return_value = prepared
+                result = transcriber.transcribe(source, language="ko")
+
+            self.assertEqual(result.text, "다시 인식한 문장")
+            model.inference.assert_called_once()
 
 
 class BigvoxTranscriberTests(unittest.TestCase):

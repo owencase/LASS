@@ -21,11 +21,12 @@ def process_source(repository, source, settings, pipeline_factory, prompt_key, l
     note = repository.get(source["note_id"])
     if source["status"] != "ready":
         try:
+            repository.begin_source_processing(source["id"])
             progress("텍스트 추출 중…")
             if source["media_type"] in DOCUMENT_EXTENSIONS:
                 document = extract_document_text(
                     Path(source["path"]),
-                    progress=lambda _: progress("텍스트 추출 중…"),
+                    progress=progress,
                 )
                 values = {"transcript": document.text}
             else:
@@ -46,7 +47,7 @@ def process_source(repository, source, settings, pipeline_factory, prompt_key, l
         progress(f"'{note.title}' 요약 중…")
         result = pipeline_factory().resummarize(note.transcript, notes=note.notes,
                                                prompt_key=prompt_key, collection_key=note.id,
-                                               progress=lambda _: progress(f"'{note.title}' 요약 중…"))
+                                               progress=progress)
         repository.replace_summary(note.id, summary=result.summary, prompt_key=prompt_key,
                                    prompt_name=result.prompt_name, vector_collection=result.vector_collection)
 
@@ -76,7 +77,6 @@ def render_source_panel(repository, note, settings, pipeline_factory, model_read
         if mode == "파일 선택":
             upload = st.file_uploader("녹음, 영상, PDF, PowerPoint", type=sorted(
                 extension.lstrip(".") for extension in {*SUPPORTED_MEDIA_EXTENSIONS, *DOCUMENT_EXTENSIONS}),
-                help="최대 200MB. 큰 파일은 로컬 파일 경로로 추가하면 업로드 메모리를 사용하지 않습니다.",
                 key=f"source-file-{note.id}-{version}")
         elif mode == "바로 녹음":
             upload = st.audio_input("마이크로 녹음",
@@ -130,7 +130,8 @@ def render_source_panel(repository, note, settings, pipeline_factory, model_read
             key=f"source-selected-{note.id}")
         source = next(item for item in sources if item["id"] == selected_id)
         st.caption(f"{format_bytes(source['file_size'])} · " +
-                   {"attached": "처리 대기", "ready": "텍스트 저장 완료", "failed": "처리 실패"}.get(source["status"], source["status"]))
+                   {"attached": "처리 대기", "processing": "처리 중단 · 다시 시작 가능",
+                    "ready": "텍스트 저장 완료", "failed": "처리 실패"}.get(source["status"], source["status"]))
         if source["error_message"]:
             st.error(source["error_message"])
         templates = prompt_manager.list_templates()

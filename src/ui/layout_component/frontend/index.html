@@ -10,6 +10,16 @@
   let transcriptObserver = null;
   let observedTranscript = null;
   let resizeTimer = null;
+  let installedKeyboardHandler = null;
+  const keyboardHandlerKey = "__lassPdfKeyboardNavigation";
+  let hoverTextObserver = null;
+  const hoverTextObserverKey = "__lassHoverTextObserver";
+  let pdfStage = null;
+  let pdfResizeObserver = null;
+  let lastPdfWheelAt = 0;
+  let pdfDomObserver = null;
+  const pdfDomObserverKey = "__lassPdfDomObserver";
+  let pdfSetupFrame = null;
 
   function sendHeight() {
     window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:0}, "*");
@@ -190,9 +200,149 @@
     transcriptObserver.observe(transcript, {childList:true,subtree:true});
   }
 
+  function isTextEntryTarget(target) {
+    if (!(target instanceof window.parent.HTMLElement)) return false;
+    return Boolean(target.closest(
+      'input, textarea, select, [contenteditable="true"], [role="textbox"], ' +
+      '.CodeMirror, .cm-editor, .ProseMirror, .lass-center-resizer'
+    ));
+  }
+
+  function installPdfKeyboardNavigation() {
+    const owner = window.parent;
+    const previousHandler = owner[keyboardHandlerKey];
+    if (previousHandler) parentDocument.removeEventListener("keydown", previousHandler);
+
+    const handler = (event) => {
+      if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (isTextEntryTarget(event.target)) return;
+      if (!parentDocument.querySelector(".lass-pdf-page")) return;
+      const direction = event.key === "ArrowLeft" ? "previous" : "next";
+      const button = parentDocument.querySelector(
+        `[class*="st-key-pdf-${direction}-"] button:not(:disabled)`
+      );
+      if (!button) return;
+      event.preventDefault();
+      button.click();
+    };
+    installedKeyboardHandler = handler;
+    owner[keyboardHandlerKey] = handler;
+    parentDocument.addEventListener("keydown", handler);
+  }
+
+  function resizePdfPage() {
+    const stage = pdfStage;
+    const page = stage?.querySelector(".lass-pdf-page");
+    if (!page?.naturalWidth || !page?.naturalHeight) return;
+    const style = window.parent.getComputedStyle(stage);
+    const width = Math.max(1, stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+    const height = Math.max(1, stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom));
+    const baseScale = contentLayout === "side" ? width / page.naturalWidth : height / page.naturalHeight;
+    const zoom = stage.dataset.fit === "true" ? 1 : Number(stage.dataset.zoom) || 1;
+    page.style.width = `${Math.round(page.naturalWidth * baseScale * zoom)}px`;
+    page.style.height = `${Math.round(page.naturalHeight * baseScale * zoom)}px`;
+  }
+
+  function setupPdfViewer() {
+    const stage = parentDocument.querySelector(".lass-pdf-stage");
+    if (stage === pdfStage) {
+      resizePdfPage();
+      return;
+    }
+    pdfResizeObserver?.disconnect();
+    pdfStage = stage;
+    if (!stage) return;
+    const page = stage.querySelector(".lass-pdf-page");
+    if (page) {
+      page.draggable = false;
+      if (!page.complete) page.addEventListener("load", resizePdfPage, {once:true});
+    }
+    pdfResizeObserver = new ResizeObserver(resizePdfPage);
+    pdfResizeObserver.observe(stage);
+    stage.addEventListener("wheel", (event) => {
+      if (event.ctrlKey || event.metaKey || !event.deltaY) return;
+      event.preventDefault();
+      const now = Date.now();
+      if (now - lastPdfWheelAt < 300) return;
+      const direction = event.deltaY > 0 ? "next" : "previous";
+      const button = parentDocument.querySelector(
+        `[class*="st-key-pdf-${direction}-"] button:not(:disabled)`
+      );
+      if (!button) return;
+      lastPdfWheelAt = now;
+      button.click();
+    }, {passive:false});
+
+    let drag = null;
+    stage.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || (stage.scrollWidth <= stage.clientWidth && stage.scrollHeight <= stage.clientHeight)) return;
+      drag = {x:event.clientX, y:event.clientY, left:stage.scrollLeft, top:stage.scrollTop};
+      stage.classList.add("lass-panning");
+      stage.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    stage.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      stage.scrollLeft = drag.left - (event.clientX - drag.x);
+      stage.scrollTop = drag.top - (event.clientY - drag.y);
+    });
+    const endDrag = () => {
+      drag = null;
+      stage.classList.remove("lass-panning");
+    };
+    stage.addEventListener("pointerup", endDrag);
+    stage.addEventListener("pointercancel", endDrag);
+    stage.addEventListener("lostpointercapture", endDrag);
+    resizePdfPage();
+  }
+
+  function observePdfViewer() {
+    window.parent[pdfDomObserverKey]?.disconnect();
+    pdfDomObserver = new MutationObserver(() => {
+      if (pdfSetupFrame !== null) return;
+      pdfSetupFrame = window.requestAnimationFrame(() => {
+        pdfSetupFrame = null;
+        setupPdfViewer();
+      });
+    });
+    pdfDomObserver.observe(parentDocument.body, {
+      childList:true, subtree:true, attributes:true, attributeFilter:["data-fit", "data-zoom"],
+    });
+    window.parent[pdfDomObserverKey] = pdfDomObserver;
+  }
+
+  function suppressHoverText() {
+    const clearTitles = (root) => {
+      if (root instanceof window.parent.Element && root.hasAttribute("title")) {
+        root.removeAttribute("title");
+      }
+      root.querySelectorAll?.("[title]").forEach((node) => node.removeAttribute("title"));
+    };
+    clearTitles(parentDocument);
+    window.parent[hoverTextObserverKey]?.disconnect();
+    hoverTextObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === "attributes") mutation.target.removeAttribute("title");
+        mutation.addedNodes.forEach((node) => clearTitles(node));
+      });
+    });
+    hoverTextObserver.observe(parentDocument.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["title"],
+    });
+    window.parent[hoverTextObserverKey] = hoverTextObserver;
+  }
+
   function setup() {
     setupCenterLayout();
+    setupPdfViewer();
+    observePdfViewer();
     setupTranscriptAutoscroll();
+    installPdfKeyboardNavigation();
+    suppressHoverText();
   }
 
   window.addEventListener("message", (event) => {
@@ -205,6 +355,21 @@
   window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:componentReady",apiVersion:1}, "*");
   sendHeight();
   setup();
+  window.addEventListener("unload", () => {
+    pdfResizeObserver?.disconnect();
+    if (window.parent[pdfDomObserverKey] === pdfDomObserver) {
+      pdfDomObserver.disconnect();
+      delete window.parent[pdfDomObserverKey];
+    }
+    if (window.parent[keyboardHandlerKey] === installedKeyboardHandler) {
+      parentDocument.removeEventListener("keydown", installedKeyboardHandler);
+      delete window.parent[keyboardHandlerKey];
+    }
+    if (window.parent[hoverTextObserverKey] === hoverTextObserver) {
+      hoverTextObserver.disconnect();
+      delete window.parent[hoverTextObserverKey];
+    }
+  });
 </script>
 </body>
 </html>

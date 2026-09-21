@@ -55,6 +55,15 @@ class NoteSourcesMixin:
             connection.execute("UPDATE note_sources SET status = 'failed', error_message = ? WHERE id = ?",
                                (error[:2000], source_id))
 
+    def begin_source_processing(self, source_id: str) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE note_sources SET status = 'processing', error_message = NULL WHERE id = ?",
+                (source_id,),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(source_id)
+
     def complete_source(self, source_id: str, *, transcript: str, segments: Sequence[Any] = (),
                         duration: Optional[float] = None, language: Optional[str] = None):
         """Append once, atomically; keep user memo, edited text and existing summary."""

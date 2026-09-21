@@ -8,6 +8,7 @@ import tempfile
 from contextlib import contextmanager
 from collections import Counter
 from pathlib import Path
+from threading import RLock
 from typing import Any, Callable, List, Optional
 
 from .audio_utils import prepared_speech_audio, validate_media_file
@@ -21,6 +22,7 @@ from .transcriber import (
 
 _LANGUAGE_TAG = re.compile(r"<\|(zh|en|yue|ja|ko)\|>", re.IGNORECASE)
 _RICH_TAG = re.compile(r"<\|[^|>]+\|>")
+_MODEL_INITIALIZATION_LOCK = RLock()
 
 
 class SenseVoiceTranscriber:
@@ -57,32 +59,58 @@ class SenseVoiceTranscriber:
 
     def _get_model(self) -> Any:
         if self._model is None:
-            try:
-                from funasr import AutoModel
-                from funasr.utils.postprocess_utils import (
-                    rich_transcription_postprocess,
-                )
-            except ImportError as exc:
-                raise RuntimeError(
-                    "SenseVoice Small 실행에는 FunASR가 필요합니다. "
-                    "`pip install -r requirements.txt`로 의존성을 "
-                    "설치해 주세요."
-                ) from exc
-            device = self._resolve_device(self.device)
-            options = {
-                "model": self.model_name,
-                "vad_model": "fsmn-vad",
-                "vad_kwargs": {"max_single_segment_time": 30_000},
-                "device": device,
-                "hub": "hf",
-                "disable_update": True,
-                "disable_pbar": True,
-            }
-            if self.compute_type == "float16" and device.startswith("cuda"):
-                options["fp16"] = True
-            self._model = AutoModel(**options)
-            self._postprocess = rich_transcription_postprocess
+            # FunASR performs module auto-registration and model downloads while
+            # constructing AutoModel. Those global operations are not thread-safe;
+            # concurrent Streamlit sessions can otherwise leave the registry only
+            # partially initialized or trip tqdm's global download lock.
+            with _MODEL_INITIALIZATION_LOCK:
+                if self._model is None:
+                    try:
+                        from funasr import AutoModel
+                        from funasr.utils.postprocess_utils import (
+                            rich_transcription_postprocess,
+                        )
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "SenseVoice Small 실행에는 FunASR가 필요합니다. "
+                            "`pip install -r requirements.txt`로 의존성을 "
+                            "설치해 주세요."
+                        ) from exc
+                    device = self._resolve_device(self.device)
+                    options = {
+                        "model": self.model_name,
+                        "vad_model": "fsmn-vad",
+                        "vad_kwargs": {"max_single_segment_time": 30_000},
+                        "device": device,
+                        "hub": "hf",
+                        "disable_update": True,
+                        "disable_pbar": True,
+                    }
+                    if self.compute_type == "float16" and device.startswith("cuda"):
+                        options["fp16"] = True
+                    self._model = AutoModel(**options)
+                    self._postprocess = rich_transcription_postprocess
         return self._model
+
+    @staticmethod
+    def _generate_without_vad(
+        model: Any, chunk_path: Path, language: Optional[str]
+    ) -> list[dict[str, Any]]:
+        """Retry audible input directly when the external VAD misses all speech."""
+        inference = getattr(model, "inference", None)
+        if not callable(inference):
+            return []
+        results = inference(
+            input=str(chunk_path),
+            cache={},
+            language=language or "auto",
+            use_itn=True,
+            batch_size_s=15,
+            sentence_timestamp=True,
+        )
+        if not isinstance(results, list):
+            return []
+        return [item for item in results if isinstance(item, dict)]
 
     def _clean_text(self, text: object) -> str:
         raw = str(text or "").strip()
@@ -202,10 +230,19 @@ class SenseVoiceTranscriber:
                     if not isinstance(results, list) or not results or not isinstance(results[0], dict):
                         raise RuntimeError("SenseVoice가 올바른 음성 인식 결과를 반환하지 않았습니다.")
                     result = results[0]
+                    chunk_duration = self._duration(chunk_path)
+                    chunk_segments = self._segments(result, chunk_duration)
+                    if not chunk_segments and prepared.source_peak > 0:
+                        fallback_results = self._generate_without_vad(
+                            model, chunk_path, language
+                        )
+                        if fallback_results:
+                            result = fallback_results[0]
+                            chunk_segments = self._segments(result, chunk_duration)
                     detected = self._language(result, str(result.get("text", "")), language)
                     if detected:
                         languages.append(detected)
-                    for item in self._segments(result, self._duration(chunk_path)):
+                    for item in chunk_segments:
                         start, end = item.start + offset, item.end + offset
                         midpoint = (start + end) / 2
                         if core_start <= midpoint < core_end or (core_end == duration and midpoint == core_end):

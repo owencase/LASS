@@ -115,7 +115,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             background:var(--bg);
         }
         .stMainBlockContainer {
-            width: 100%; height:100%; min-height:0; overflow:hidden;
+            width:100%; height:100%; min-height:0; overflow:hidden;
             max-width:none;
             padding:0;
         }
@@ -145,8 +145,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .lass-global-brand small {
             display:block; margin-top:.2rem; color:var(--muted); font-size:.56rem; letter-spacing:.08em;
         }
-        .st-key-lass-header-menu button,
-        .st-key-lass-header-settings button {
+        .st-key-lass-header-menu button {
             width:2.15rem !important; min-height:2.15rem !important; height:2.15rem !important;
             padding:0 !important; justify-content:center !important;
         }
@@ -208,14 +207,14 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-workspace-pane {
             height:100%; min-height:0; overflow-y:auto; overflow-x:hidden;
             padding:.7rem 1rem 1rem; border:0;
-            background:var(--bg); scrollbar-gutter:stable;
+            background:var(--bg); scrollbar-gutter:auto;
             scrollbar-width:thin; scrollbar-color:var(--line) transparent;
         }
         .st-key-lass-ai-pane {
             height:100%; min-height:0; overflow-y:auto; overflow-x:hidden;
             padding:.75rem;
             border-left:1px solid var(--line); border-radius:0;
-            background:var(--panel); scrollbar-gutter:stable;
+            background:var(--panel); scrollbar-gutter:auto;
             scrollbar-width:thin; scrollbar-color:var(--line) transparent;
         }
         .st-key-lass-library-scroll {
@@ -230,12 +229,15 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             color:var(--text); font-size:.84rem; font-weight:700;
             overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
         }
-        .st-key-toggle-library-panel {
-            width:2.35rem !important; height:2.35rem !important; margin:0 !important;
+        .st-key-toggle-library-panel,
+        .st-key-toggle-right-panel {
+            display:flex; align-items:center; justify-content:center;
+            width:2rem !important; height:2rem !important; margin:0 !important;
         }
-        .st-key-toggle-library-panel button {
-            width:2.35rem !important; height:2.35rem !important; min-height:2.35rem !important;
-            padding:0 !important; text-align:center !important; justify-content:center;
+        .st-key-toggle-library-panel button,
+        .st-key-toggle-right-panel button {
+            width:2rem !important; height:2rem !important; min-height:2rem !important;
+            padding:0 !important; text-align:center !important; justify-content:center !important;
             border-color:var(--line) !important; background:var(--panel) !important;
             box-shadow:none; font-size:1rem;
         }
@@ -373,6 +375,10 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [data-testid="stAlertContainer"] *, [role="dialog"] *,
         [data-baseweb="notification"] *, [data-baseweb="tooltip"] *,
         [data-testid="stTooltipContent"] * { color:var(--text) !important; }
+        [data-baseweb="tooltip"], [role="tooltip"],
+        [data-testid="stTooltipContent"] {
+            display:none !important; visibility:hidden !important;
+        }
         [data-testid="stAlertContainer"] a, [data-testid="stToast"] a {
             color:var(--accent) !important;
         }
@@ -399,6 +405,49 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [data-testid="stPopoverBody"] [data-testid="stTabs"],
         [data-baseweb="popover"] > div {
             color:var(--text) !important; background:var(--panel) !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stForm"] [data-testid="stVerticalBlock"] {
+            gap:.65rem !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stWidgetLabel"] {
+            height:auto !important; min-height:0 !important; margin-bottom:.2rem !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stWidgetLabel"] p {
+            color:var(--text) !important; font-size:.72rem !important; line-height:1.35 !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] .react-aria-ComboBox [role="group"] {
+            height:2.25rem; min-height:2.25rem; overflow:hidden;
+            border:1px solid var(--line); border-radius:.5rem; background:var(--field);
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] .react-aria-ComboBox [role="group"]:focus-within {
+            border-color:var(--accent);
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] .react-aria-ComboBox input[role="combobox"] {
+            height:100% !important; min-height:0 !important; padding:.3rem .65rem !important;
+            border:0 !important; color:var(--text) !important; background:transparent !important;
+            font-size:.75rem !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] .react-aria-ComboBox button[aria-label="Open"] {
+            width:2rem; height:100%; min-height:0; padding:0;
+            border:0 !important; border-left:1px solid var(--line) !important;
+            border-radius:0 !important; color:var(--muted) !important;
+            background:var(--panel-2) !important; box-shadow:none !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] .react-aria-ComboBox button[aria-label="Open"] svg {
+            color:inherit !important; fill:currentColor !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stTextInputRootElement"],
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stTextInputField"] {
+            height:2.25rem !important; min-height:2.25rem !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stTextInputField"] {
+            padding:.3rem .65rem !important; color:var(--text) !important;
+            background:var(--field) !important; font-size:.75rem !important;
+        }
+        [data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stFormSubmitButton"] button {
+            min-height:2.25rem !important; height:2.25rem !important;
+            color:var(--text) !important; background:var(--panel-2) !important;
+            font-size:.75rem !important;
         }
         [data-testid="stFormSubmitButton"] button {
             color:var(--text) !important; background:var(--panel-2) !important; border-color:var(--line) !important;
@@ -428,6 +477,15 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [data-testid="stFileUploaderDropzone"] span:first-child {
             color:var(--text) !important;
         }
+        /* The document dialog uses the whole dropzone as its file picker. */
+        [role="dialog"] [data-testid="stFileUploaderDropzone"][aria-label="PDF · PowerPoint"] > span {
+            position:absolute !important; width:1px !important; height:1px !important;
+            overflow:hidden !important; clip-path:inset(50%) !important;
+            white-space:nowrap !important;
+        }
+        [role="dialog"] [data-testid="stFileUploaderDropzone"][aria-label="PDF · PowerPoint"] {
+            position:relative; cursor:pointer;
+        }
         [data-testid="stAudioInput"] {
             padding:.8rem; border:1px solid var(--line); border-radius:.9rem;
             color:var(--text) !important; background:var(--field) !important;
@@ -449,6 +507,18 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
             color:var(--text) !important; border-color:var(--line) !important;
             background:var(--panel-2) !important;
+        }
+        [data-testid="stSelectboxVirtualDropdown"] {
+            color:var(--text) !important; border:1px solid var(--line) !important;
+            background:var(--panel) !important; box-shadow:0 12px 30px rgba(15,23,42,.12) !important;
+        }
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"],
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"] * {
+            color:var(--text) !important;
+        }
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"][data-focused="true"],
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover {
+            background:var(--hover) !important;
         }
         li[role="option"] { color:var(--text) !important; background:var(--panel-2) !important; }
         li[role="option"]:hover, li[aria-selected="true"] { background:var(--hover) !important; }
@@ -659,12 +729,15 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         [data-baseweb="tab-highlight"] { background:var(--accent) !important; }
 
-        /* AI Lecture Notes reference shell */
+        /* LASS workspace shell */
         .stMainBlockContainer { padding:0; }
         .stMainBlockContainer > [data-testid="stVerticalBlock"] { gap:0 !important; }
         .st-key-lass-layout {
-            flex:0 0 100vh; height:100vh !important; min-height:100vh;
+            flex:0 0 100vh; flex-basis:100dvh;
+            height:100vh !important; height:100dvh !important;
+            min-height:100vh; min-height:100dvh;
         }
+        .st-key-lass-layout-resizer,
         [class*="st-key-lass-layout-resizer-"] {
             position:absolute !important; width:0 !important; height:0 !important;
             min-height:0 !important; overflow:hidden !important;
@@ -705,25 +778,23 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-library-body > [data-testid="stLayoutWrapper"]:has(.st-key-lass-library-content) {
             flex:1 1 0; min-height:0; overflow:hidden;
         }
-        .st-key-all-notes-button button,
-        .st-key-favorites-button button,
-        .st-key-recent-button button {
-            min-height:2.25rem; padding:0 .75rem; justify-content:flex-start !important;
-            border-color:transparent !important; color:var(--text) !important;
-            background:transparent !important; box-shadow:none; font-size:.78rem;
-            font-weight:500;
+        .st-key-lass-library-tools [data-testid="stHorizontalBlock"] {
+            gap:.45rem !important;
         }
-        .st-key-all-notes-button button[data-testid="stBaseButton-primary"],
-        .st-key-favorites-button button[data-testid="stBaseButton-primary"],
-        .st-key-recent-button button[data-testid="stBaseButton-primary"] {
-            border-color:#f1f5f9 !important; background:var(--panel) !important;
-            box-shadow:0 1px 3px rgba(15,23,42,.08); font-weight:600;
+        .st-key-chatting-button button,
+        .st-key-quiz-button button {
+            min-height:2.25rem; padding:0 .6rem; justify-content:center !important;
+            border:1px solid var(--line) !important; color:var(--text) !important;
+            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.08);
+            font-size:.72rem; font-weight:650;
         }
-        .st-key-all-notes-button button *,
-        .st-key-favorites-button button *,
-        .st-key-recent-button button * { color:var(--text) !important; }
+        .st-key-chatting-button button *,
+        .st-key-quiz-button button * { color:var(--text) !important; }
         .st-key-lass-library-body .lass-pane-title {
-            min-height:1.5rem; margin:.45rem 0 0; padding:0 .55rem;
+            min-height:1.5rem; margin:.45rem 0 .4rem; padding:0 .55rem;
+        }
+        .st-key-lass-library-body > [data-testid="stElementContainer"]:has(.lass-pane-title) {
+            margin-bottom:.75rem !important;
         }
         .st-key-lass-library-body .lass-pane-title b {
             color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.1em;
@@ -731,20 +802,11 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-library-body .lass-pane-title span { display:none; }
         .st-key-lass-library-body input { min-height:2.25rem; font-size:.74rem; }
         .st-key-lass-sidebar-footer {
-            height:4rem; padding:.7rem .75rem; border-top:1px solid color-mix(in srgb,var(--line) 58%,transparent);
+            height:4rem; padding:.7rem 1rem; border-top:1px solid color-mix(in srgb,var(--line) 58%,transparent);
             background:var(--panel-2);
         }
         .st-key-lass-sidebar-footer > [data-testid="stLayoutWrapper"],
         .st-key-lass-sidebar-footer [data-testid="stHorizontalBlock"] { height:100%; align-items:center; }
-        .lass-local-user { display:flex; align-items:center; gap:.55rem; }
-        .lass-local-user > span {
-            display:grid; place-items:center; width:2rem; height:2rem; border-radius:50%;
-            color:#fff; background:linear-gradient(135deg,var(--accent),var(--violet));
-            font-size:.62rem; font-weight:800;
-        }
-        .lass-local-user b, .lass-local-user small { display:block; }
-        .lass-local-user b { font-size:.72rem; }
-        .lass-local-user small { margin-top:.16rem; color:var(--muted); font-size:.58rem; }
 
         .st-key-lass-workspace-pane {
             display:flex; height:100%; padding:0; overflow:hidden;
@@ -782,16 +844,32 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-library-panel),
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-right-panel) {
-            flex:0 0 2rem !important; width:2rem !important;
+            display:flex; align-items:center; justify-content:center;
+            flex:0 0 2rem !important; width:2rem !important; height:2rem;
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-document-breadcrumb) {
-            flex:1 1 10rem !important; width:auto !important;
+            display:flex; align-self:center; align-items:center;
+            flex:1 1 10rem !important; width:auto !important; height:2rem; overflow:hidden;
+        }
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) > [data-testid="stVerticalBlock"],
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stElementContainer"],
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stMarkdown"],
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stMarkdown"] > div,
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stMarkdownContainer"] {
+            display:flex; align-items:center; width:100%; height:2rem; min-height:0;
+            margin:0 !important; padding:0 !important; gap:0 !important;
+        }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-center-layout) {
+            flex:0 0 7.4rem !important; width:7.4rem !important;
+        }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-document-actions) {
+            flex:0 0 7.4rem !important; width:7.4rem !important;
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-counter) {
             flex:0 0 6.5rem !important; width:6.5rem !important;
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-zoom-value) {
-            flex:0 0 6.8rem !important; width:6.8rem !important;
+            flex:0 0 12rem !important; width:12rem !important;
             border-left:1px solid var(--line);
         }
         .st-key-lass-center-header button {
@@ -800,7 +878,16 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             background:transparent !important; box-shadow:none !important;
         }
         .st-key-toggle-library-panel button,
-        .st-key-toggle-right-panel button { width:2rem !important; height:2rem !important; min-height:2rem !important; }
+        .st-key-toggle-right-panel button {
+            display:flex !important; align-items:center !important; justify-content:center !important;
+            width:2rem !important; height:2rem !important; min-height:2rem !important;
+            padding:0 !important; gap:0 !important; line-height:1 !important;
+        }
+        .st-key-toggle-library-panel button [data-testid="stIconMaterial"],
+        .st-key-toggle-right-panel button [data-testid="stIconMaterial"] {
+            display:grid !important; place-items:center !important;
+            margin:0 !important; line-height:1 !important;
+        }
         .st-key-toggle-library-panel button p,
         .st-key-toggle-right-panel button p { display:none; }
         .st-key-toggle-library-panel button::before,
@@ -816,6 +903,17 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [class*="st-key-pdf-zoom-in-"] button {
             width:2rem !important; min-width:2rem !important; padding:0 !important;
             color:var(--muted) !important; font-size:.9rem !important;
+        }
+        [class*="st-key-pdf-fit-toggle-"] button {
+            width:100% !important; min-width:0 !important; height:2rem !important;
+            padding:0 .35rem !important; border:1px solid var(--line) !important;
+            border-radius:.38rem !important; color:var(--text) !important;
+            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+            font-size:.64rem !important; font-weight:750 !important;
+        }
+        [class*="st-key-pdf-fit-toggle-"] button[data-testid="stBaseButton-primary"] {
+            border-color:var(--accent) !important; color:var(--accent) !important;
+            background:var(--accent-soft) !important;
         }
         .lass-pdf-counter, .lass-pdf-zoom-value {
             display:flex; align-items:center; justify-content:center; height:2rem; min-height:0;
@@ -842,6 +940,9 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             position:relative; display:flex; flex-direction:column; width:100%; height:100%;
             min-height:0; margin:0; padding:1.25rem; gap:0 !important;
             overflow:auto; background:var(--bg);
+        }
+        .st-key-lass-document-pane:has(.lass-pdf-stage) {
+            padding:0; overflow:hidden;
         }
         .st-key-lass-document-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-empty-viewer) {
             flex:1 1 0; width:100%; height:100%; min-height:0; overflow:hidden;
@@ -870,15 +971,23 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-document-pane [data-testid="stMarkdownContainer"]:has(.lass-pdf-stage) {
             flex:1 1 0; width:100%; height:100%; min-height:0;
         }
-        .lass-pdf-stage {
-            display:flex; align-items:flex-start; justify-content:center; width:100%; height:100%;
-            min-height:0; padding:.5rem; overflow:auto;
+        .st-key-lass-document-pane .stMarkdown:has(.lass-pdf-stage) > div {
+            display:flex; flex:1 1 0; align-items:stretch; width:100%; height:100%; min-height:0; overflow:hidden;
         }
-        .lass-pdf-page {
-            display:block; width:auto; height:auto; max-width:100%; max-height:100%;
+        .st-key-lass-document-pane [data-testid="stMarkdownContainer"]:has(.lass-pdf-stage) {
+            margin:0 !important; overflow:hidden;
+        }
+        .lass-pdf-stage {
+            box-sizing:border-box; width:100%; height:100%; min-height:0; padding:0; overflow:auto;
+            overscroll-behavior:contain; cursor:grab; touch-action:none;
+        }
+        .lass-pdf-stage.lass-panning { cursor:grabbing; user-select:none; }
+        .st-key-lass-document-pane .lass-pdf-page {
+            display:block; width:auto; height:auto; max-width:none !important; max-height:none !important;
+            margin:0 auto;
             object-fit:contain; border-radius:.125rem; background:var(--panel);
             box-shadow:0 8px 30px rgba(0,0,0,.08);
-            transform:scale(var(--lass-pdf-zoom,1)); transform-origin:top center;
+            pointer-events:none; user-select:none;
         }
 
         .st-key-lass-memo-pane {
@@ -887,7 +996,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         .st-key-lass-memo-pane > [data-testid="stLayoutWrapper"]:first-child,
         .st-key-lass-memo-pane > [data-testid="stElementContainer"]:first-child {
-            flex:0 0 3rem; min-height:3rem; padding:.5rem 1.5rem .35rem;
+            flex:0 0 2.25rem; min-height:2.25rem; padding:.25rem 1.25rem;
             border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent);
         }
         .st-key-lass-memo-pane > [data-testid="stElementContainer"]:has(textarea) {
@@ -905,9 +1014,9 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-memo-pane [data-testid="stTextAreaRootElement"] {
             border:0 !important; background:transparent !important;
         }
-        .lass-memo-title { display:flex; align-items:center; gap:.45rem; height:2rem; }
-        .lass-memo-title > span { color:var(--accent); font-size:1rem; }
-        .lass-memo-title b { font-size:.68rem; letter-spacing:.05em; }
+        .lass-memo-title { display:flex; align-items:center; gap:.4rem; height:1.75rem; }
+        .lass-memo-title > span { color:var(--accent); font-size:.85rem; }
+        .lass-memo-title b { font-size:.64rem; letter-spacing:.05em; }
         .lass-memo-title small { margin-left:auto; color:#16a34a; font-size:.56rem; }
         .st-key-lass-memo-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-memo-actions) {
             flex:0 0 3rem; min-height:3rem;
@@ -963,7 +1072,24 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-right-header button:hover { color:var(--text) !important; }
         .st-key-lass-right-header button[data-testid="stBaseButton-primary"]:hover { color:var(--violet) !important; }
         .st-key-lass-right-header button [data-testid="stIconMaterial"] { font-size:.95rem; }
-        .st-key-lass-sidebar-footer [data-testid="stPopover"] button svg { display:none; }
+        .st-key-lass-header-settings [data-testid="stPopover"] > div {
+            display:flex; justify-content:flex-end;
+        }
+        .st-key-lass-header-settings [data-testid="stPopoverButton"] {
+            width:3rem !important; min-width:3rem !important;
+            height:2.25rem !important; min-height:2.25rem !important;
+            margin:0 0 0 auto !important; padding:0 !important;
+            justify-content:center !important; gap:0 !important;
+            border:1px solid var(--line) !important; border-radius:.45rem !important;
+            color:var(--text) !important; background:var(--panel) !important;
+            font-size:.72rem !important; font-weight:750 !important;
+        }
+        .st-key-lass-header-settings [data-testid="stPopoverButton"] [aria-hidden="true"] {
+            display:none !important;
+        }
+        .st-key-lass-header-settings [data-testid="stPopoverButton"] > div {
+            margin:0 !important;
+        }
         .st-key-lass-transcript-stream, .st-key-lass-summary-stream {
             height:100%; padding:1rem; overflow:auto; background:var(--panel);
         }
@@ -972,7 +1098,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             visibility:hidden;
         }
         .st-key-lass-recording-actions {
-            position:static; margin:0; padding:1rem 1.5rem;
+            position:static; margin:0; padding:.7rem 1.25rem;
             border-top:1px solid color-mix(in srgb,var(--line) 58%,transparent);
             background:color-mix(in srgb,var(--panel-2) 55%,var(--panel));
         }
@@ -981,7 +1107,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             border-top:1px solid var(--line); background:var(--panel);
         }
         .st-key-lass-recording-actions [data-testid="stCustomComponentV1"] iframe {
-            min-height:9.5rem !important; height:9.5rem !important; border-radius:0;
+            min-height:7.375rem !important; height:7.375rem !important; border-radius:0;
         }
 
         /* Sidebars float above the workspace so opening one never reflows the PDF or memo. */
@@ -1033,7 +1159,14 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
 
         .st-key-toggle-library-panel button::before,
         .st-key-toggle-right-panel button::before { display:none !important; content:none !important; }
-        .st-key-toggle-center-layout button { min-width:5rem; }
+        .st-key-toggle-center-layout button,
+        .st-key-lass-document-actions button {
+            width:100% !important; min-width:0 !important; min-height:2rem; height:2rem;
+            padding:0 .55rem !important; border:1px solid var(--line) !important;
+            border-radius:.38rem !important; color:var(--text) !important;
+            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+            font-size:.68rem !important; font-weight:750 !important;
+        }
         .st-key-toggle-library-panel button p,
         .st-key-toggle-right-panel button p,
         .st-key-close-library-panel button p,
@@ -1044,32 +1177,112 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             min-height:2rem !important; padding:0 !important; border:0 !important;
             background:transparent !important; box-shadow:none !important;
         }
-        .st-key-lass-sidebar-header [data-testid="stHorizontalBlock"] { height:100%; align-items:center; }
+        .st-key-close-library-panel button,
+        .st-key-close-right-panel button {
+            border:1px solid transparent !important; border-radius:.5rem !important;
+        }
+        .st-key-close-library-panel button:hover,
+        .st-key-close-right-panel button:hover {
+            border-color:var(--accent) !important; border-radius:.5rem !important;
+            background:var(--hover) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+        }
+        .st-key-lass-sidebar-header { padding:0 0 0 1rem; }
+        .st-key-lass-sidebar-header [data-testid="stHorizontalBlock"] {
+            display:flex !important; height:100%; align-items:center;
+            flex-wrap:nowrap !important; gap:0 !important;
+        }
+        .st-key-lass-right-header [data-testid="stHorizontalBlock"] {
+            display:flex !important; flex-wrap:nowrap !important;
+        }
+        .st-key-lass-sidebar-header [data-testid="stColumn"]:not(:has(.st-key-close-library-panel)),
+        .st-key-lass-right-header [data-testid="stColumn"]:not(:has(.st-key-close-right-panel)) {
+            flex:1 1 0 !important; width:auto !important; min-width:0 !important;
+        }
+        .st-key-lass-sidebar-header [data-testid="stColumn"]:has(.st-key-close-library-panel),
         .st-key-lass-right-header [data-testid="stColumn"]:has(.st-key-close-right-panel) {
-            flex:0 0 2.4rem !important; width:2.4rem !important;
+            display:flex; align-items:center; justify-content:center;
+            flex:0 0 3.5rem !important; width:3.5rem !important; height:3.5rem;
+        }
+        .st-key-close-library-panel,
+        .st-key-close-right-panel {
+            display:flex; align-items:center; justify-content:center;
+            width:100%; height:3.5rem; margin:0 !important;
+        }
+        .st-key-close-library-panel button,
+        .st-key-close-right-panel button {
+            display:flex !important; align-items:center !important; justify-content:center !important;
+            margin:0 auto !important; gap:0 !important; line-height:1 !important;
+        }
+        .st-key-close-library-panel button [data-testid="stIconMaterial"],
+        .st-key-close-right-panel button [data-testid="stIconMaterial"] {
+            display:grid !important; place-items:center !important;
+            margin:0 !important; line-height:1 !important;
+        }
+        /* Keep button labels accessible without leaving an invisible flex item beside the icon. */
+        .st-key-lass-header-settings [data-testid="stPopoverButton"],
+        .st-key-toggle-library-panel button,
+        .st-key-toggle-right-panel button,
+        .st-key-close-library-panel button,
+        .st-key-close-right-panel button { position:relative !important; }
+        .st-key-lass-header-settings [data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"],
+        .st-key-toggle-library-panel button [data-testid="stMarkdownContainer"],
+        .st-key-toggle-right-panel button [data-testid="stMarkdownContainer"],
+        .st-key-close-library-panel button [data-testid="stMarkdownContainer"],
+        .st-key-close-right-panel button [data-testid="stMarkdownContainer"] {
+            position:absolute !important; width:1px !important; height:1px !important;
+            overflow:hidden !important; clip-path:inset(50%) !important;
+            white-space:nowrap !important;
+        }
+        .st-key-lass-header-settings [data-testid="stPopoverButton"] p,
+        .st-key-toggle-library-panel button p,
+        .st-key-toggle-right-panel button p,
+        .st-key-close-library-panel button p,
+        .st-key-close-right-panel button p { display:block !important; }
+
+        /* Use one visual treatment for all four panel open/close controls. */
+        .st-key-toggle-library-panel button,
+        .st-key-close-library-panel button,
+        .st-key-toggle-right-panel button,
+        .st-key-close-right-panel button {
+            width:2rem !important; min-width:2rem !important;
+            height:2rem !important; min-height:2rem !important;
+            padding:0 !important; border:1px solid transparent !important;
+            border-radius:.5rem !important; background:transparent !important;
+            box-shadow:none !important; color:var(--muted) !important;
+        }
+        .st-key-toggle-library-panel button:hover,
+        .st-key-close-library-panel button:hover,
+        .st-key-toggle-right-panel button:hover,
+        .st-key-close-right-panel button:hover {
+            border-color:var(--accent) !important; background:var(--hover) !important;
+            box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+            color:var(--text) !important;
+        }
+        .st-key-toggle-library-panel button [data-testid="stIconMaterial"],
+        .st-key-close-library-panel button [data-testid="stIconMaterial"],
+        .st-key-toggle-right-panel button [data-testid="stIconMaterial"],
+        .st-key-close-right-panel button [data-testid="stIconMaterial"] {
+            display:grid !important; place-items:center !important;
+            width:1.125rem !important; height:1.125rem !important;
+            margin:0 !important; font-size:1.125rem !important; line-height:1 !important;
+            font-variation-settings:'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
         }
 
         /* 100% fits the whole page; other values scale from that fitted page. */
         .st-key-lass-document-actions {
-            display:flex !important; position:absolute; z-index:15; top:1rem; right:1rem;
-            justify-content:flex-end; width:auto; height:auto; overflow:visible;
+            display:flex !important; align-items:center; width:100%; height:100%; overflow:visible;
         }
         [class*="st-key-document-upload-"] { display:block !important; }
         .st-key-lass-document-actions button {
-            min-height:2rem; height:2rem; padding:0 .7rem; border-color:var(--line) !important;
-            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
-        }
-        .st-key-lass-document-empty-viewer .st-key-lass-document-actions {
-            position:relative; inset:auto; justify-content:center; width:auto; height:auto;
-        }
-        .st-key-lass-document-empty-viewer > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-actions),
-        .st-key-lass-document-empty-viewer > [data-testid="stElementContainer"]:has(.st-key-lass-document-actions) {
-            flex:0 0 auto; width:auto; height:auto; overflow:visible;
+            overflow:hidden;
         }
 
         .st-key-lass-memo-pane > [data-testid="stElementContainer"]:has([data-testid="stCustomComponentV1"]),
         .st-key-lass-memo-pane > [data-testid="stLayoutWrapper"]:has([data-testid="stCustomComponentV1"]) {
             flex:1 1 0; width:100%; height:100%; min-height:0; overflow:hidden;
+        }
+        .st-key-lass-memo-pane > [data-testid="stElementContainer"]:has([data-testid="stCustomComponentV1"]) > div {
+            height:100% !important; min-height:0 !important;
         }
         .st-key-lass-memo-pane [data-testid="stCustomComponentV1"],
         .st-key-lass-memo-pane [data-testid="stCustomComponentV1"] iframe {
@@ -1099,7 +1312,9 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             .lass-top-meta > span { display:none; }
             .lass-empty { min-height:20rem; }
             .st-key-lass-layout {
-                flex-basis:100vh; height:100vh !important; min-height:100vh;
+                flex:0 0 100vh; flex-basis:100dvh;
+                height:100vh !important; height:100dvh !important;
+                min-height:100vh; min-height:100dvh;
             }
         }
         @media (prefers-reduced-motion: reduce) {

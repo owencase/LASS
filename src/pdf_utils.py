@@ -146,10 +146,10 @@ def extract_pdf_text(
             for index in range(page_count):
                 page = document.load_page(index)
                 native = page.get_text("text", sort=True).strip()
-                has_images = bool(page.get_images(full=True))
-                needs_ocr = _visible_characters(native) < 40 or (
-                    has_images and _visible_characters(native) < 160
-                )
+                # A usable embedded text layer is authoritative even when a page
+                # also contains decorative images. OCR is reserved for scanned or
+                # effectively textless pages on both Vision and RapidOCR runtimes.
+                needs_ocr = _visible_characters(native) < 40
                 if needs_ocr:
                     if progress:
                         progress(

@@ -28,29 +28,33 @@
     #app { display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden; }
     .hint { display:none; }
     .tree { flex:1 1 0; min-height:0; overflow:auto; padding-right:3px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
-    .folder { margin-bottom: 4px; }
+    .folder { margin-bottom: 2px; }
     .folder-row, .note-row {
       width: 100%; display: flex; align-items: center; min-width: 0;
       border: 1px solid transparent; border-radius: 8px; cursor: default;
       user-select: none; transition: background .12s ease, border-color .12s ease;
     }
-    .folder-row { height: 36px; padding: 0 8px; color: var(--text); font-size: 13px; font-weight: 650; }
+    .folder-row { height: 32px; padding: 0 8px; color: var(--text); font-size: 12px; font-weight: 650; cursor:pointer; }
     .folder-row:hover, .note-row:hover { background: var(--hover); }
     .folder-row.selected-folder { color: var(--text); border-color: rgba(168,146,255,.28); background: rgba(168,146,255,.11); }
-    .chevron { width: 18px; color: var(--muted); font-size: 10px; transition: transform .15s ease; }
-    .folder.open .chevron { transform: rotate(90deg); }
-    .folder-icon { margin-right: 7px; color: var(--violet, #7d65db); font-size: 14px; }
+    .chevron { display:grid; place-items:center; width:18px; height:18px; flex:0 0 18px; color:var(--muted); }
+    .chevron svg { display:block; width:14px; height:14px; }
+    .chevron-open, .folder.open .chevron-closed { display:none; }
+    .folder.open .chevron-open { display:block; }
+    .folder-icon, .note-icon { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex:0 0 16px; }
+    .folder-icon { margin-right:7px; color:var(--violet); }
+    .folder-icon svg, .note-icon svg { display:block; width:16px; height:16px; }
     .folder-name, .note-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .count { margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 500; }
-    .folder-notes { display: none; padding-left: 18px; }
+    .folder-notes { display: none; padding-left: 16px; }
     .folder.open .folder-notes { display: block; }
-    .note-row { min-height: 52px; margin-bottom:4px; padding: 7px 9px; color: var(--text); border-color:color-mix(in srgb,var(--line) 62%,transparent); background:var(--panel); font-size: 12px; }
+    .note-row { min-height:40px; margin-bottom:2px; padding:4px 8px; color:var(--text); background:transparent; font-size:12px; }
     .note-row.selected { color: var(--text); border-color: color-mix(in srgb, var(--accent) 30%, transparent); background: var(--selected); }
-    .note-icon { width: 18px; flex: 0 0 18px; color: var(--muted); font-size: 12px; }
+    .note-icon { margin-right:7px; color:var(--muted); }
     .note-row.selected .note-icon { color: var(--accent); }
     .note-copy { min-width: 0; }
     .note-title { display: block; line-height: 1.25; }
-    .note-meta { display: block; overflow: hidden; margin-top: 2px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .note-meta { display: block; overflow: hidden; margin-top: 1px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
     .empty { padding: 28px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: center; white-space: pre-line; }
     .menu {
       position: fixed; z-index: 50; display: none; min-width: 170px; padding: 5px;
@@ -74,6 +78,8 @@
   <script>
     const app = document.getElementById("app");
     const menu = document.getElementById("menu");
+    const folderIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h4l2 2H16a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 16 16.5H4A1.5 1.5 0 0 1 2.5 15V6.5Z"/></svg>';
+    const noteIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="2"/><path d="M7 7h6M7 10h6M7 13h4"/></svg>';
     let state = { folders: [], notes: [], selected_id: null, selected_folder_id: null, theme_mode: "dark", text_scale: 100 };
     const expanded = new Set();
     let initialized = false;
@@ -117,6 +123,15 @@
       menu.appendChild(title);
 
       if (kind === "folder") {
+        menu.appendChild(button("새 노트", () => {
+          const title = window.prompt(`'${item.name}' 폴더에 만들 노트 이름`, "새 노트");
+          if (title && title.trim()) {
+            post("create_note", { title: title.trim(), folder_id: item.id });
+          }
+        }));
+        const separator = document.createElement("div");
+        separator.className = "menu-separator";
+        menu.appendChild(separator);
         menu.appendChild(button("이름 변경", () => {
           const name = window.prompt("폴더 이름", item.name);
           if (name && name.trim() && name.trim() !== item.name) {
@@ -145,6 +160,25 @@
           }
         }, "danger"));
       }
+      positionMenu(event.clientX, event.clientY);
+    }
+
+    function showCreateMenu(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      menu.innerHTML = "";
+      const title = document.createElement("div");
+      title.className = "menu-title";
+      title.textContent = "새로 만들기";
+      menu.appendChild(title);
+      menu.appendChild(button("새 폴더", () => {
+        const name = window.prompt("새 폴더 이름", "");
+        if (name && name.trim()) post("create_folder", { name: name.trim() });
+      }));
+      menu.appendChild(button("새 노트", () => {
+        const title = window.prompt("새 노트 이름", "새 노트");
+        if (title && title.trim()) post("create_note", { title: title.trim() });
+      }));
       positionMenu(event.clientX, event.clientY);
     }
 
@@ -177,7 +211,7 @@
       row.title = `${note.title}\n${note.source_name}`;
       const icon = document.createElement("span");
       icon.className = "note-icon";
-      icon.textContent = "▤";
+      icon.innerHTML = noteIcon;
       const copy = document.createElement("span");
       copy.className = "note-copy";
       const title = document.createElement("span");
@@ -198,12 +232,15 @@
       block.className = `folder${expanded.has(folder.id) ? " open" : ""}`;
       const row = document.createElement("div");
       row.className = `folder-row${folder.id === state.selected_folder_id ? " selected-folder" : ""}`;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-expanded", String(expanded.has(folder.id)));
+      row.tabIndex = 0;
       const chevron = document.createElement("span");
       chevron.className = "chevron";
-      chevron.textContent = "▶";
+      chevron.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chevron-closed" d="M7.5 5 12.5 10 7.5 15"/><path class="chevron-open" d="M5 7.5 10 12.5 15 7.5"/></svg>';
       const icon = document.createElement("span");
       icon.className = "folder-icon";
-      icon.textContent = "▰";
+      icon.innerHTML = folderIcon;
       const name = document.createElement("span");
       name.className = "folder-name";
       name.textContent = folder.name;
@@ -211,18 +248,16 @@
       count.className = "count";
       count.textContent = notes.length;
       row.append(chevron, icon, name, count);
-      chevron.addEventListener("click", (event) => {
-        event.stopPropagation();
+      const toggleFolder = () => {
         expanded.has(folder.id) ? expanded.delete(folder.id) : expanded.add(folder.id);
         render();
-      });
-      row.addEventListener("click", () => {
-        if (folder.id === "__unfiled__") {
-          expanded.has(folder.id) ? expanded.delete(folder.id) : expanded.add(folder.id);
-          render();
-        } else {
-          post("select_folder", { folder_id: folder.id });
-        }
+        if (folder.id !== "__unfiled__") post("select_folder", { folder_id: folder.id });
+      };
+      row.addEventListener("click", toggleFolder);
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        toggleFolder();
       });
       if (folder.id !== "__unfiled__") {
         row.addEventListener("contextmenu", (event) => showMenu(event, "folder", folder));
@@ -255,9 +290,13 @@
       if (!state.folders.length && !state.notes.length) {
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = "아직 노트가 없습니다.\n새 노트를 추가해 시작하세요.";
+        empty.textContent = "아직 노트가 없습니다.\n빈 공간을 우클릭해 폴더나 노트를 만드세요.";
         tree.appendChild(empty);
       }
+      tree.addEventListener("contextmenu", (event) => {
+        if (event.target.closest(".folder-row, .note-row")) return;
+        showCreateMenu(event);
+      });
       app.appendChild(tree);
       setHeight(650);
     }

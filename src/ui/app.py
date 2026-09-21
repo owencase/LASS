@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import platform
 import tempfile
@@ -214,6 +215,19 @@ def _handle_library_event(
             st.session_state["selected_folder_id"] = folder_id
             st.session_state.pop("selected_note_id", None)
             st.session_state.pop("new_note_mode", None)
+        elif action == "create_note":
+            folder_id = event.get("folder_id")
+            created = repository.create_empty(
+                title=str(event["title"]),
+                folder_id=str(folder_id) if folder_id else None,
+            )
+            st.session_state["selected_note_id"] = created.id
+            st.session_state.pop("selected_folder_id", None)
+            st.session_state.pop("new_note_mode", None)
+            st.session_state["flash_message"] = "새 노트를 만들었습니다."
+        elif action == "create_folder":
+            repository.create_folder(str(event["name"]))
+            st.session_state["flash_message"] = "새 폴더를 만들었습니다."
         elif action == "rename_note":
             repository.update(str(event["note_id"]), title=str(event["name"]))
             st.session_state["flash_message"] = "노트 이름을 변경했습니다."
@@ -271,80 +285,6 @@ def _handle_library_event(
         }.get(str(exc), str(exc))
         st.session_state["flash_error"] = message
     st.rerun()
-
-
-def _render_library(
-    repository: LectureRepository,
-    settings: Settings,
-    selected_id: Optional[str],
-    selected_folder_id: Optional[str],
-    theme_mode: str,
-    text_scale: int,
-) -> None:
-    render_pane_title("내 노트", "FOLDERS · FILES")
-    note_column, folder_column = st.columns(2, gap="small")
-    with note_column:
-        if st.button("＋ 노트 추가", type="primary", use_container_width=True):
-            created = repository.create_empty(folder_id=selected_folder_id)
-            st.session_state["selected_note_id"] = created.id
-            st.session_state.pop("new_note_mode", None)
-            st.session_state.pop("selected_folder_id", None)
-            st.rerun()
-    with folder_column:
-        if st.button("＋ 새 폴더", use_container_width=True):
-            st.session_state["show_folder_create"] = not st.session_state.get(
-                "show_folder_create", False
-            )
-            st.rerun()
-
-    if st.session_state.get("show_folder_create"):
-        version = st.session_state.get("folder_form_version", 0)
-        folder_name = st.text_input(
-            "새 폴더 이름",
-            placeholder="폴더 이름",
-            label_visibility="collapsed",
-            key=f"new_folder_name_{version}",
-        )
-        create_column, cancel_column = st.columns(2, gap="small")
-        with create_column:
-            if st.button("폴더 만들기", use_container_width=True):
-                try:
-                    folder = repository.create_folder(folder_name)
-                except ValueError as exc:
-                    message = (
-                        "같은 이름의 폴더가 이미 있습니다."
-                        if "already exists" in str(exc)
-                        else "폴더 이름을 입력해 주세요."
-                    )
-                    st.error(message)
-                else:
-                    st.session_state["show_folder_create"] = False
-                    st.session_state["folder_form_version"] = version + 1
-                    st.session_state["selected_folder_id"] = folder.id
-                    st.session_state.pop("selected_note_id", None)
-                    st.session_state.pop("new_note_mode", None)
-                    st.session_state["flash_message"] = "새 폴더를 만들었습니다."
-                    st.rerun()
-        with cancel_column:
-            if st.button("취소", use_container_width=True):
-                st.session_state["show_folder_create"] = False
-                st.rerun()
-
-    search = st.text_input(
-        "노트 검색",
-        placeholder="노트 또는 메모 검색",
-        label_visibility="collapsed",
-        key="library_search",
-    )
-    event = render_library_tree(
-        repository.list_folders(),
-        repository.list(search, lightweight=True),
-        selected_id,
-        selected_folder_id,
-        theme=theme_mode,
-        text_scale=text_scale,
-    )
-    _handle_library_event(event, repository, settings)
 
 
 def _media_mime(media_type: str) -> str:
@@ -432,14 +372,15 @@ def _render_pdf_viewer(
     preview: tuple[Path, bytes, int, int],
     *,
     zoom: int = 100,
+    fit: bool = True,
 ) -> None:
     """Render one page without a second, conflicting PDF toolbar."""
     _, page_data, page_number, _ = preview
     encoded = base64.b64encode(page_data).decode("ascii")
     st.markdown(
-        '<div class="lass-pdf-stage">'
+        f'<div class="lass-pdf-stage" data-zoom="{zoom / 100:.2f}" '
+        f'data-fit="{str(fit).lower()}">'
         f'<img class="lass-pdf-page" data-page="{page_number}" '
-        f'style="--lass-pdf-zoom:{zoom / 100:.2f}" '
         f'src="data:image/png;base64,{encoded}" alt="{escape(note.title, quote=True)} · '
         f'{page_number}페이지"></div>',
         unsafe_allow_html=True,
@@ -452,6 +393,7 @@ def _render_recording(
     *,
     pdf_preview: Optional[tuple[Path, bytes, int, int]] = None,
     pdf_zoom: int = 100,
+    pdf_fit: bool = True,
 ) -> None:
     path = _media_path(repository, note)
     if path is None:
@@ -464,7 +406,7 @@ def _render_recording(
             render_error(str(exc))
             return
         if preview is not None:
-            _render_pdf_viewer(note, preview, zoom=pdf_zoom)
+            _render_pdf_viewer(note, preview, zoom=pdf_zoom, fit=pdf_fit)
     elif note.media_type.lower() in PRESENTATION_EXTENSIONS:
         render_info(
             "PowerPoint 원본",
@@ -533,20 +475,20 @@ def _resummarize_note(
     settings: Settings,
     prompt_key: str,
     include_memo: bool,
+    status: Optional[Any] = None,
 ) -> None:
-    status = st.empty()
+    if status is None:
+        status = st.empty()
     status.info(f"'{note.title}' 요약 중…")
     try:
         workspace_note = repository.get_workspace(note.id)
         if workspace_note is None:
             raise KeyError(f"Unknown lecture: {note.id}")
         result = get_pipeline().resummarize_pages(
-            repository.iter_transcript_pages(
-                note.id, page_chars=settings.chunk_size
-            ),
+            _interactive_summary_pages(repository, workspace_note, settings),
             prompt_key=prompt_key,
             notes=workspace_note.notes if include_memo else "",
-            progress=lambda _: status.info(f"'{note.title}' 요약 중…"),
+            progress=lambda message: status.info(message),
         )
         if note.vector_collection and note.vector_collection != result.vector_collection:
             SQLiteVectorStore.delete_collection(
@@ -1013,7 +955,6 @@ def _render_model_profile_manager(
             key=f"remove-model-button-{kind}",
             disabled=len(profiles) <= 1,
             use_container_width=True,
-            help="목록에서만 제거하며 로컬 모델 파일은 삭제하지 않습니다.",
         ):
             removed = registry.remove(remove_key)
             _get_pipeline_for_profiles.clear()
@@ -1030,7 +971,7 @@ def _render_preferences(
     text_scale: int,
 ) -> None:
     del repository, theme_mode, text_scale
-    st.caption("화면은 제공된 AI Lecture Notes 디자인으로 고정됩니다.")
+    st.caption("화면은 LASS 작업공간 디자인으로 고정됩니다.")
     st.caption("저메모리 모드: 모델을 단계별로 해제하고 요약 입력을 제한합니다.")
     stt_tab, llm_tab = st.tabs(["STT", "LLM"])
     with stt_tab:
@@ -1118,12 +1059,6 @@ def _layout_ratios(show_library: bool, show_ai: bool, width_mode: str) -> list[f
     return [1.0]
 
 
-def _select_library_note(note_id: str) -> None:
-    st.session_state["selected_note_id"] = note_id
-    st.session_state.pop("selected_folder_id", None)
-    st.session_state.pop("new_note_mode", None)
-
-
 def _toggle_library_panel() -> None:
     st.session_state["library_open"] = not st.session_state.get("library_open", True)
 
@@ -1155,8 +1090,8 @@ def _render_sidebar_header() -> None:
         brand, close = st.columns([1, 0.18], gap="small")
         with brand:
             st.markdown(
-                '<div class="lass-global-brand"><span class="lass-brand-mark">✦</span>'
-                '<span><strong>AI Lecture Notes</strong><small>v2.4 · Local AI</small></span></div>',
+                '<div class="lass-global-brand"><span class="lass-brand-mark">LA</span>'
+                '<span><strong>LASS</strong><small>Local AI Study Studio</small></span></div>',
                 unsafe_allow_html=True,
             )
         with close:
@@ -1164,7 +1099,6 @@ def _render_sidebar_header() -> None:
                 "목록 닫기",
                 icon=":material/left_panel_close:",
                 key="close-library-panel",
-                help="왼쪽 노트 패널 닫기",
                 on_click=_toggle_library_panel,
                 use_container_width=True,
             )
@@ -1177,44 +1111,9 @@ def _render_sidebar_footer(
     text_scale: int,
 ) -> None:
     with st.container(key="lass-sidebar-footer"):
-        identity, settings_column = st.columns([1, 0.24], gap="small")
-        with identity:
-            st.markdown(
-                '<div class="lass-local-user"><span>LA</span><div><b>Local Workspace</b>'
-                '<small>On device</small></div></div>',
-                unsafe_allow_html=True,
-            )
-        with settings_column:
-            with st.container(key="lass-header-settings"):
-                with st.popover("⚙", use_container_width=True):
-                    if st.button(
-                        "＋ 새 노트",
-                        type="primary",
-                        use_container_width=True,
-                        key="footer-new-note",
-                    ):
-                        created = repository.create_empty()
-                        _select_library_note(created.id)
-                        st.rerun()
-                    with st.expander("＋ 새 폴더"):
-                        with st.form("footer-folder-form", clear_on_submit=True):
-                            folder_name = st.text_input(
-                                "폴더 이름", placeholder="새 폴더 이름"
-                            )
-                            if st.form_submit_button(
-                                "만들기", use_container_width=True
-                            ):
-                                try:
-                                    repository.create_folder(folder_name)
-                                except ValueError as exc:
-                                    st.error(
-                                        "같은 이름의 폴더가 이미 있습니다."
-                                        if "already exists" in str(exc)
-                                        else "폴더 이름을 입력해 주세요."
-                                    )
-                                else:
-                                    st.rerun()
-                    _render_preferences(repository, registry, theme_mode, text_scale)
+        with st.container(key="lass-header-settings"):
+            with st.popover("설정", icon=":material/settings:", use_container_width=True):
+                _render_preferences(repository, registry, theme_mode, text_scale)
 
 
 def _render_library_buttons(
@@ -1226,42 +1125,29 @@ def _render_library_buttons(
     text_scale: int,
 ) -> None:
     """Render the library with its folder/note context-management menu."""
-    active_view = st.session_state.get("library-view", "all")
-    if st.button(
-        "All Courses",
-        icon=":material/dashboard:",
-        type="primary" if active_view == "all" else "secondary",
-        use_container_width=True,
-        key="all-notes-button",
-    ):
-        st.session_state["library-view"] = "all"
-        st.rerun()
-    if st.button(
-        "Favorites",
-        icon=":material/star:",
-        type="primary" if active_view == "favorites" else "secondary",
-        use_container_width=True,
-        key="favorites-button",
-    ):
-        st.session_state["library-view"] = "favorites"
-        st.rerun()
-    if st.button(
-        "Recent",
-        icon=":material/history:",
-        type="primary" if active_view == "recent" else "secondary",
-        use_container_width=True,
-        key="recent-button",
-    ):
-        st.session_state["library-view"] = "recent"
-        st.rerun()
+    with st.container(key="lass-library-tools"):
+        chatting_column, quiz_column = st.columns(2, gap="small")
+        with chatting_column:
+            st.button(
+                "Chating",
+                icon=":material/chat:",
+                use_container_width=True,
+                key="chatting-button",
+            )
+        with quiz_column:
+            st.button(
+                "Quiz",
+                icon=":material/quiz:",
+                use_container_width=True,
+                key="quiz-button",
+            )
 
-    render_pane_title("Courses", "FOLDERS")
-    visible_notes = notes[:12] if active_view == "recent" else notes
+    render_pane_title("폴더 및 노트", "목록")
     folders = repository.list_folders()
     with st.container(key="lass-library-content"):
         event = render_library_tree(
             folders,
-            visible_notes,
+            notes,
             selected_id,
             theme=theme_mode,
             text_scale=text_scale,
@@ -1325,7 +1211,7 @@ def _attach_and_process_path(
             prompt_key,
             None,
             False,
-            lambda _: status.info("텍스트 추출 중…"),
+            lambda message: status.info(message),
         )
     except Exception as exc:
         if source is None and copied_upload:
@@ -1335,6 +1221,11 @@ def _attach_and_process_path(
         st.error(str(exc))
     else:
         status.success(f"{label}을 저장했습니다.")
+        if kind == "document" and copied_upload:
+            state_key = f"browser-upload-open-document-{note.id}"
+            version_key = f"browser-upload-version-document-{note.id}"
+            st.session_state[state_key] = False
+            st.session_state[version_key] = int(st.session_state.get(version_key, 0)) + 1
         st.session_state["flash_message"] = (
             "업로드한 원본과 추출된 텍스트를 노트에 저장했습니다."
             if copied_upload
@@ -1352,12 +1243,50 @@ def _attach_and_process_local_file(
 ) -> None:
     try:
         path = _desktop_file_path(kind)
-    except Exception as exc:
+    except Exception:
         st.session_state[f"browser-upload-open-{kind}-{note.id}"] = True
-        st.error(f"파일 선택 창을 열지 못했습니다. 아래 업로드를 이용해 주세요: {exc}")
+        st.rerun()
         return
     if path is not None:
         _attach_and_process_path(repository, note, settings, path, kind=kind)
+
+
+def _interactive_summary_pages(
+    repository: LectureRepository,
+    note: LectureRecord,
+    settings: Settings,
+):
+    """Build one bounded context spanning a long transcript for interactive use."""
+    context_budget = min(3_200, max(1_200, settings.exaone_max_input_tokens))
+    if note.transcript_chars <= context_budget:
+        yield from repository.iter_transcript_pages(
+            note.id, page_chars=context_budget
+        )
+        return
+
+    source_page_chars = max(1_200, settings.chunk_size)
+    source_page_count = max(1, math.ceil(note.transcript_chars / source_page_chars))
+    excerpt_count = min(8, source_page_count)
+    selected_indexes = {
+        round(index * (source_page_count - 1) / max(1, excerpt_count - 1))
+        for index in range(excerpt_count)
+    }
+    excerpt_budget = max(160, (context_budget - excerpt_count * 32) // excerpt_count)
+    excerpts = []
+    for index, page in enumerate(
+        repository.iter_transcript_pages(note.id, page_chars=source_page_chars)
+    ):
+        if index not in selected_indexes:
+            continue
+        text = page.strip()
+        if len(text) > excerpt_budget:
+            half = max(1, (excerpt_budget - 3) // 2)
+            text = f"{text[:half]} … {text[-half:]}"
+        excerpts.append(
+            f"[전체 자료 위치 {index + 1}/{source_page_count}]\n{text}"
+        )
+    if excerpts:
+        yield "\n\n".join(excerpts)
 
 
 def _attach_and_process_upload(
@@ -1415,7 +1344,6 @@ def _render_browser_upload(
         label,
         type=sorted(extension.lstrip(".") for extension in allowed),
         key=f"browser-upload-{kind}-{note.id}-{version}",
-        help="최대 200MB. 데스크톱 앱에서는 더 큰 파일을 복사 없이 열 수 있습니다.",
     )
     add_column, cancel_column = st.columns([1, 0.45], gap="small")
     with add_column:
@@ -1438,6 +1366,24 @@ def _render_browser_upload(
             st.session_state[state_key] = False
             st.session_state[version_key] = version + 1
             st.rerun()
+
+
+def _dismiss_document_upload_dialog() -> None:
+    note_id = st.session_state.get("document-upload-dialog-note-id")
+    if note_id:
+        st.session_state[f"browser-upload-open-document-{note_id}"] = False
+
+
+@st.dialog(
+    "PDF · PPT 추가", width="small", on_dismiss=_dismiss_document_upload_dialog
+)
+def _render_document_upload_dialog(
+    repository: LectureRepository,
+    note: LectureRecord,
+    settings: Settings,
+) -> None:
+    st.caption("아래 영역을 클릭하거나 파일을 끌어다 놓으세요.")
+    _render_browser_upload(repository, note, settings, kind="document")
 
 
 def _document_source_note(note: LectureRecord, source: dict[str, Any]) -> LectureRecord:
@@ -1486,6 +1432,7 @@ def _active_document_source(
     current_id = st.session_state.get(active_key, source_ids[-1])
     if current_id not in source_ids:
         current_id = source_ids[-1]
+        st.session_state[active_key] = current_id
     return next(source for source in sources if source["id"] == current_id)
 
 
@@ -1547,7 +1494,9 @@ def _render_center_panel(
     pdf_key = document_note.id if document_note else "empty"
     page_key = f"pdf-page-{pdf_key}"
     zoom_key = f"pdf-zoom-{pdf_key}"
+    fit_key = f"pdf-fit-{pdf_key}"
     zoom = min(200, max(50, int(st.session_state.get(zoom_key, 100))))
+    fit = bool(st.session_state.get(fit_key, True))
     center_layout = st.session_state.get("center-layout", "stack")
 
     with st.container(key="lass-center-header"):
@@ -1555,16 +1504,18 @@ def _render_center_panel(
             sidebar_column,
             breadcrumb_column,
             layout_column,
+            upload_column,
             pages_column,
             zoom_column,
             right_column,
-        ) = st.columns([0.12, 1.15, 0.3, 0.42, 0.44, 0.12], gap="small")
+        ) = st.columns(
+            [0.12, 1.15, 0.56, 0.56, 0.42, 0.44, 0.12], gap="small"
+        )
         with sidebar_column:
             st.button(
                 "노트 목록",
                 icon=":material/left_panel_open:",
                 key="toggle-library-panel",
-                help="왼쪽 노트 패널 열기/닫기",
                 on_click=_toggle_library_panel,
                 use_container_width=True,
             )
@@ -1581,7 +1532,6 @@ def _render_center_panel(
                 if st.button(
                     "←",
                     key=f"pdf-previous-{pdf_key}",
-                    help="이전 페이지",
                     disabled=page_number <= 1,
                     use_container_width=True,
                 ):
@@ -1596,39 +1546,50 @@ def _render_center_panel(
                 if st.button(
                     "→",
                     key=f"pdf-next-{pdf_key}",
-                    help="다음 페이지",
                     disabled=not page_count or page_number >= page_count,
                     use_container_width=True,
                 ):
                     st.session_state[page_key] = page_number + 1
                     st.rerun()
         with zoom_column:
-            zoom_out, zoom_value, zoom_in = st.columns([1, 1.25, 1], gap="small")
+            zoom_out, zoom_value, zoom_in, fit_column = st.columns([1, 1, 1, 2.2], gap="small")
             with zoom_out:
                 if st.button(
                     "−",
                     key=f"pdf-zoom-out-{pdf_key}",
-                    help="축소",
                     disabled=preview is None or zoom <= 50,
                     use_container_width=True,
                 ):
                     st.session_state[zoom_key] = zoom - 25
+                    st.session_state[fit_key] = False
                     st.rerun()
             with zoom_value:
                 st.markdown(
                     f'<span class="lass-pdf-zoom-value" data-zoom="{zoom / 100:.2f}">'
-                    f'{zoom}%{" 맞춤" if zoom == 100 else ""}</span>',
+                    f'{zoom}%</span>',
                     unsafe_allow_html=True,
                 )
             with zoom_in:
                 if st.button(
                     "＋",
                     key=f"pdf-zoom-in-{pdf_key}",
-                    help="확대",
                     disabled=preview is None or zoom >= 200,
                     use_container_width=True,
                 ):
                     st.session_state[zoom_key] = zoom + 25
+                    st.session_state[fit_key] = False
+                    st.rerun()
+            with fit_column:
+                if st.button(
+                    "높이 맞춤" if center_layout == "stack" else "너비 맞춤",
+                    key=f"pdf-fit-toggle-{pdf_key}",
+                    disabled=preview is None,
+                    type="primary" if fit else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state[fit_key] = not fit
+                    if not fit:
+                        st.session_state[zoom_key] = 100
                     st.rerun()
         with layout_column:
             st.button(
@@ -1639,20 +1600,17 @@ def _render_center_panel(
                     else ":material/view_agenda:"
                 ),
                 key="toggle-center-layout",
-                help=(
-                    "PDF를 왼쪽, 메모를 오른쪽에 배치"
-                    if center_layout == "stack"
-                    else "PDF를 위, 메모를 아래에 배치"
-                ),
                 on_click=_toggle_center_layout,
                 use_container_width=True,
             )
+        with upload_column:
+            if note is not None:
+                _render_document_upload_action(repository, note, settings)
         with right_column:
             st.button(
                 "AI 패널",
                 icon=":material/right_panel_open:",
                 key="toggle-right-panel",
-                help="오른쪽 AI 패널 열기/닫기",
                 on_click=_toggle_right_panel,
                 use_container_width=True,
             )
@@ -1669,21 +1627,12 @@ def _render_center_panel(
                         '<small>이 뷰어에서 PDF나 PowerPoint를 바로 추가하세요.</small></div>',
                         unsafe_allow_html=True,
                     )
-                    _render_document_upload_action(repository, note, settings)
-                    _render_browser_upload(
-                        repository, note, settings, kind="document"
-                    )
             else:
-                _render_document_upload_action(repository, note, settings)
-                _render_browser_upload(repository, note, settings, kind="document")
-
                 active_key = f"active-document-source-{note.id}"
                 source_ids = [source["id"] for source in sources]
-                current_id = st.session_state.get(active_key, source_ids[-1])
-                if current_id not in source_ids:
-                    current_id = source_ids[-1]
+                current_id = source["id"]
                 if len(sources) > 1:
-                    current_id = st.selectbox(
+                    selected_id = st.selectbox(
                         "표시 자료",
                         source_ids,
                         index=source_ids.index(current_id),
@@ -1693,21 +1642,50 @@ def _render_center_panel(
                         key=active_key,
                         label_visibility="collapsed",
                     )
-                source = next(item for item in sources if item["id"] == current_id)
-                document_note = _document_source_note(note, source)
-                if source["media_type"].lower() == PDF_EXTENSION:
-                    try:
-                        preview = _pdf_preview(repository, document_note)
-                    except (OSError, RuntimeError, ValueError) as exc:
-                        render_error(str(exc))
-                        preview = None
+                    # The header controls were built from `source` earlier in this
+                    # run. Never render a viewer with a newly selected source and
+                    # the previous source's page controls; restart with one source
+                    # as the single authority for both header and body.
+                    if selected_id != source["id"]:
+                        st.rerun()
                 if source.get("error_message"):
                     render_warning("텍스트 추출 확인 필요", str(source["error_message"]))
+                if source.get("status") != "ready" and source.get("id") != "legacy":
+                    render_warning(
+                        "텍스트 추출이 완료되지 않았습니다",
+                        "중단된 PDF/PPT 처리를 다시 시작하면 요약 기능이 활성화됩니다.",
+                    )
+                    if st.button(
+                        "텍스트 추출 다시 시작",
+                        key=f"retry-document-processing-{source['id']}",
+                        use_container_width=True,
+                    ):
+                        extraction_status = st.empty()
+                        try:
+                            process_source(
+                                repository,
+                                source,
+                                settings,
+                                get_pipeline,
+                                "default_summary",
+                                None,
+                                False,
+                                extraction_status.info,
+                            )
+                        except Exception as exc:
+                            extraction_status.error("텍스트 추출에 실패했습니다.")
+                            st.error(str(exc))
+                        else:
+                            st.session_state["flash_message"] = (
+                                "문서 텍스트 추출을 완료했습니다."
+                            )
+                            st.rerun()
                 _render_recording(
                     repository,
                     document_note,
                     pdf_preview=preview,
                     pdf_zoom=zoom,
+                    pdf_fit=fit,
                 )
 
         if note is not None:
@@ -1724,6 +1702,12 @@ def _render_center_panel(
                     theme_mode="light",
                     text_scale=100,
                 )
+
+    if note is not None and st.session_state.get(
+        f"browser-upload-open-document-{note.id}"
+    ):
+        st.session_state["document-upload-dialog-note-id"] = note.id
+        _render_document_upload_dialog(repository, note, settings)
 
 
 def _get_live_transcriber(registry: ModelRegistry):
@@ -1873,7 +1857,15 @@ def _render_right_panel(
 ) -> None:
     mode = st.session_state.get("right-panel-mode", "녹음")
     with st.container(key="lass-right-header"):
-        transcription_tab, summary_tab, close_tab = st.columns([1, 1, 0.24], gap=None)
+        close_tab, transcription_tab, summary_tab = st.columns([0.24, 1, 1], gap=None)
+        with close_tab:
+            st.button(
+                "AI 패널 닫기",
+                icon=":material/right_panel_close:",
+                key="close-right-panel",
+                on_click=_toggle_right_panel,
+                use_container_width=True,
+            )
         with transcription_tab:
             st.button(
                 "Transcription",
@@ -1890,15 +1882,6 @@ def _render_right_panel(
                 type="primary" if mode == "요약" else "secondary",
                 key="right-tab-summary",
                 on_click=_open_summary_panel,
-                use_container_width=True,
-            )
-        with close_tab:
-            st.button(
-                "AI 패널 닫기",
-                icon=":material/right_panel_close:",
-                key="close-right-panel",
-                help="오른쪽 AI 패널 닫기",
-                on_click=_toggle_right_panel,
                 use_container_width=True,
             )
     if note is None:
@@ -1936,7 +1919,15 @@ def _render_right_panel(
                 disabled=not bool(note.notes.strip()),
                 key=f"right-summary-memo-{note.id}",
             )
+        summary_progress = st.empty()
     with st.container(key="lass-summary-actions"):
+        if not model_status.ready:
+            st.caption(
+                "요약 모델 파일이 준비되지 않았습니다. 설정 → 모델 → LLM에서 "
+                "현재 운영체제용 로컬 모델 경로를 확인해 주세요."
+            )
+        elif note.transcript_chars <= 0:
+            st.caption("요약할 녹취 또는 문서 텍스트가 필요합니다.")
         summarize_column, export_column = st.columns([1, 0.9], gap="small")
         with summarize_column:
             if st.button(
@@ -1948,7 +1939,12 @@ def _render_right_panel(
             ):
                 _release_live_transcriber()
                 _resummarize_note(
-                    repository, note, settings, prompt_key, include_memo
+                    repository,
+                    note,
+                    settings,
+                    prompt_key,
+                    include_memo,
+                    status=summary_progress,
                 )
         with export_column:
             export_note = repository.get(note.id) or note

@@ -101,11 +101,26 @@ class UIComponentTests(unittest.TestCase):
         self.assertIn(".lass-center-resizer", css)
         self.assertIn(".st-key-lass-document-memo-layout", css)
         self.assertIn(".st-key-lass-document-pane", css)
+        self.assertIn(":has(.st-key-toggle-center-layout)", css)
+        self.assertIn(":has(.st-key-lass-document-actions)", css)
+        self.assertIn("flex:0 0 7.4rem", css)
+        self.assertIn(".st-key-toggle-center-layout button,", css)
         self.assertIn(".st-key-lass-recording-actions", css)
         self.assertIn('[data-testid="stPopoverBody"] [data-testid="stVerticalBlock"]', css)
         self.assertIn(".st-key-lass-sidebar-header", css)
         self.assertIn(".st-key-toggle-library-panel", css)
-        self.assertIn("height:100vh !important", css)
+        self.assertIn(".st-key-toggle-right-panel", css)
+        self.assertIn("place-items:center !important", css)
+        self.assertIn('[data-testid="stMarkdown"] > div', css)
+        self.assertIn('[role="tooltip"]', css)
+        self.assertIn("visibility:hidden !important", css)
+        self.assertIn("height:100dvh", css)
+        self.assertIn("height:100% !important; min-height:0", css)
+        self.assertIn("scrollbar-gutter:auto", css)
+        self.assertIn(".st-key-lass-layout-resizer,", css)
+        self.assertIn(":has(.st-key-close-library-panel)", css)
+        self.assertIn("flex:0 0 3.5rem !important", css)
+        self.assertIn("flex-wrap:nowrap !important", css)
 
     def test_resizer_persists_each_layout_and_supports_keyboard(self) -> None:
         html = (
@@ -114,6 +129,12 @@ class UIComponentTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("lass-panel-widths", html)
         self.assertIn('event.key !== "ArrowLeft"', html)
+        self.assertIn("installPdfKeyboardNavigation", html)
+        self.assertIn("suppressHoverText", html)
+        self.assertIn('removeAttribute("title")', html)
+        self.assertIn('input, textarea, select, [contenteditable="true"]', html)
+        self.assertIn('event.key !== "ArrowLeft" && event.key !== "ArrowRight"', html)
+        self.assertIn('button:not(:disabled)', html)
         self.assertIn('role", "separator"', html)
         self.assertIn("pointerdown", html)
         self.assertNotIn("frame.contentDocument", html)
@@ -125,6 +146,98 @@ class UIComponentTests(unittest.TestCase):
         self.assertIn('event.key !== "ArrowUp"', html)
         self.assertIn("setupTranscriptAutoscroll", html)
         self.assertIn("scrollTop = transcript.scrollHeight", html)
+        self.assertIn('contentLayout === "side" ? width / page.naturalWidth', html)
+        self.assertIn('height / page.naturalHeight', html)
+        self.assertIn('pdfResizeObserver.observe(stage)', html)
+        self.assertIn('pdfDomObserver.observe(parentDocument.body', html)
+        self.assertIn('stage.addEventListener("wheel"', html)
+        self.assertIn('stage.setPointerCapture(event.pointerId)', html)
+        self.assertIn('stage.scrollLeft = drag.left', html)
+
+    def test_pdf_viewer_stays_bounded_and_zoomable(self) -> None:
+        css = (
+            Path(__file__).parents[1] / "src/ui/components.py"
+        ).read_text(encoding="utf-8")
+        app = (Path(__file__).parents[1] / "src/ui/app.py").read_text(encoding="utf-8")
+        self.assertNotIn('padding-left:calc(clamp(17rem,22vw,20rem) + .75rem)', css)
+        self.assertNotIn('padding-right:calc(clamp(21rem,29vw,27rem) + .75rem)', css)
+        self.assertNotIn('z-index:1; width:auto !important;', css)
+        self.assertIn('position:absolute !important; inset:0; width:100% !important', css)
+        self.assertIn('right:auto; z-index:60; width:clamp(17rem,22vw,20rem)', css)
+        self.assertIn('left:auto; z-index:55; width:clamp(21rem,29vw,27rem)', css)
+        self.assertIn('flex:0 0 6.5rem !important; width:6.5rem !important', css)
+        self.assertIn('button[data-testid="stBaseButton-primary"]', css)
+        self.assertIn('background:var(--accent-soft) !important', css)
+        self.assertIn('st.columns([1, 1, 1, 2.2], gap="small")', app)
+        self.assertIn('type="primary" if fit else "secondary"', app)
+        self.assertIn('.stMarkdown:has(.lass-pdf-stage) > div', css)
+        self.assertIn('box-sizing:border-box; width:100%; height:100%', css)
+        self.assertIn('.st-key-lass-document-pane:has(.lass-pdf-stage)', css)
+        self.assertIn('padding:0; overflow:hidden;', css)
+        self.assertIn('margin:0 !important; overflow:hidden;', css)
+        self.assertIn('min-height:0; padding:0; overflow:auto;', css)
+        self.assertIn('max-width:none !important; max-height:none !important', css)
+
+    def test_sidebar_settings_has_compact_icon_only_trigger(self) -> None:
+        root = Path(__file__).parents[1]
+        app = (root / "src/ui/app.py").read_text(encoding="utf-8")
+        css = (root / "src/ui/components.py").read_text(encoding="utf-8")
+        self.assertNotIn('lass-local-user', app)
+        self.assertIn('with st.container(key="lass-sidebar-footer"):', app)
+        self.assertIn('st.popover("설정", icon=":material/settings:"', app)
+        self.assertIn('.st-key-lass-header-settings [data-testid="stPopoverButton"]', css)
+        self.assertIn('width:3rem !important; min-width:3rem !important;', css)
+        self.assertIn('height:2.25rem !important; min-height:2.25rem !important;', css)
+        self.assertIn('[data-testid="stPopoverButton"] [aria-hidden="true"]', css)
+        self.assertIn('.st-key-lass-header-settings [data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"]', css)
+        self.assertIn('.st-key-toggle-library-panel button [data-testid="stMarkdownContainer"]', css)
+        self.assertIn('.st-key-toggle-right-panel button [data-testid="stMarkdownContainer"]', css)
+        self.assertIn('.st-key-close-library-panel button [data-testid="stMarkdownContainer"]', css)
+        self.assertIn('.st-key-close-right-panel button [data-testid="stMarkdownContainer"]', css)
+
+    def test_panel_open_close_controls_share_icon_size_and_hover_treatment(self) -> None:
+        css = (Path(__file__).parents[1] / "src/ui/components.py").read_text(encoding="utf-8")
+        for key in (
+            "toggle-library-panel", "close-library-panel",
+            "toggle-right-panel", "close-right-panel",
+        ):
+            self.assertIn(f'.st-key-{key} button [data-testid="stIconMaterial"]', css)
+            self.assertIn(f'.st-key-{key} button:hover', css)
+        self.assertIn('font-size:1.125rem !important; line-height:1 !important;', css)
+        self.assertIn('border-radius:.5rem !important; background:transparent !important;', css)
+
+    def test_settings_popover_controls_match_light_workspace(self) -> None:
+        css = (Path(__file__).parents[1] / "src/ui/components.py").read_text(encoding="utf-8")
+        self.assertIn('[data-testid="stPopoverBody"][aria-label="설정"] .react-aria-ComboBox', css)
+        self.assertIn('[data-testid="stPopoverBody"][aria-label="설정"] [data-testid="stTextInputField"]', css)
+        self.assertIn('[data-testid="stSelectboxVirtualDropdown"] [role="option"]', css)
+        self.assertIn('gap:.65rem !important;', css)
+
+    def test_document_upload_is_dialog_without_visible_upload_button(self) -> None:
+        root = Path(__file__).parents[1]
+        app = (root / "src/ui/app.py").read_text(encoding="utf-8")
+        css = (root / "src/ui/components.py").read_text(encoding="utf-8")
+        self.assertIn('@st.dialog(\n    "PDF · PPT 추가"', app)
+        self.assertEqual(
+            app.count('_render_browser_upload(repository, note, settings, kind="document")'),
+            1,
+        )
+        self.assertIn(
+            '[role="dialog"] [data-testid="stFileUploaderDropzone"][aria-label="PDF · PowerPoint"] > span',
+            css,
+        )
+        self.assertIn('clip-path:inset(50%) !important;', css)
+
+    def test_live_recorder_is_compact_and_has_no_waveform_label(self) -> None:
+        html = (
+            Path(__file__).parents[1]
+            / "src/ui/live_recorder_component/frontend/index.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("Waveform active", html)
+        self.assertIn("height:118px", html)
+        self.assertIn("height:118", html)
+        self.assertIn('id="elapsed"', html)
 
     def test_memo_editor_formats_and_auto_saves(self) -> None:
         html = (
@@ -132,9 +245,35 @@ class UIComponentTests(unittest.TestCase):
             / "src/ui/editable_component/frontend/index.html"
         ).read_text(encoding="utf-8")
         self.assertIn('post("save_memo"', html)
-        self.assertIn("setRangeText", html)
-        self.assertIn("prefixLines", html)
         self.assertIn("}, 600)", html)
+        self.assertIn('field.contentEditable = "true"', html)
+        self.assertIn("memoEditorContent", html)
+        self.assertIn("memoToMarkdown", html)
+        self.assertIn('command("bold")', html)
+        self.assertIn('tool("A−", "선택 글자 작게"', html)
+        self.assertIn('tool("A+", "선택 글자 크게"', html)
+        self.assertIn('document.execCommand("fontSize"', html)
+        self.assertIn('if (node.matches("font[size]"))', html)
+        self.assertIn('const view = markdownView(text, true)', html)
+        self.assertIn('pane.getBoundingClientRect().bottom - frame.getBoundingClientRect().top', html)
+        self.assertIn('command("insertUnorderedList")', html)
+        self.assertIn('command("italic")', html)
+        self.assertIn('command("underline")', html)
+        self.assertIn('if (underline && !activeMarks.has("underline"))', html)
+        self.assertIn('if (bold && !activeMarks.has("bold"))', html)
+        self.assertIn('if (italic && !activeMarks.has("italic"))', html)
+        self.assertIn('formatted = `<strong>${formatted}</strong>`', html)
+        self.assertIn('formatted = `<em>${formatted}</em>`', html)
+        self.assertIn('font|u|strong|em', html)
+        self.assertIn('token.startsWith("****")', html)
+        self.assertIn('token.startsWith("***")', html)
+        self.assertNotIn('className = "memo-preview"', html)
+        self.assertIn('tool("B", "굵게"', html)
+        self.assertIn('tool("•", "글머리 목록"', html)
+        self.assertIn('tool("I", "기울이기"', html)
+        self.assertIn('tool("U", "밑줄"', html)
+        self.assertNotIn('tool("☑", "체크 목록"', html)
+        self.assertNotIn('tool("↗", "링크"', html)
 
     def test_live_recorder_backpressures_bounded_chunks(self) -> None:
         html = (
