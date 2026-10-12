@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from threading import Thread, current_thread
 from pathlib import Path
 from unittest.mock import Mock, patch
 from types import SimpleNamespace
@@ -96,3 +97,17 @@ class RuntimeMemoryTests(unittest.TestCase):
         self.assertLessEqual(len(ids), 512)
         self.assertEqual(tokenizer.conversation[0]['content'], '자료로만 답하기')
         self.assertIn('[질문] 핵심은?', tokenizer.conversation[-1]['content'])
+
+    def test_mlx_requests_from_new_threads_share_one_inference_thread(self):
+        client = LocalEXAONEClient(Path('.'), backend='mlx')
+        seen = []
+        client._chat_mlx_on_thread = lambda conversation, **kwargs: seen.append(current_thread().name) or '요약'
+
+        for _ in range(3):
+            request = Thread(target=client.chat, args=('지시', '다시 요약'))
+            request.start()
+            request.join()
+
+        self.assertEqual(len(seen), 3)
+        self.assertEqual(len(set(seen)), 1)
+        self.assertNotEqual(seen[0], current_thread().name)

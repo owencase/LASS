@@ -3,12 +3,37 @@
 from __future__ import annotations
 
 import gc
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import RLock
-from typing import Any, Mapping, Sequence, Tuple
+from threading import Lock, RLock, current_thread
+from typing import Any, Callable, Mapping, Sequence, Tuple
 
 from .model_manager import LocalModelManager
 from src.runtime import release_memory, resolve_device
+
+
+_MLX_THREAD_PREFIX = "lass-mlx"
+_mlx_executor: ThreadPoolExecutor | None = None
+_mlx_executor_lock = Lock()
+
+
+def _run_on_mlx_thread(function: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Run every MLX call on one long-lived thread.
+
+    MLX streams are thread-local and mlx-lm creates its generation stream once,
+    at import. Streamlit runs each rerun on a new thread, so a second request
+    would otherwise fail with "There is no Stream(gpu, 0) in current thread".
+    """
+    global _mlx_executor
+    if current_thread().name.startswith(_MLX_THREAD_PREFIX):
+        return function(*args, **kwargs)
+    with _mlx_executor_lock:
+        if _mlx_executor is None:
+            _mlx_executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix=_MLX_THREAD_PREFIX
+            )
+        executor = _mlx_executor
+    return executor.submit(function, *args, **kwargs).result()
 
 
 class LocalEXAONEClient:
@@ -124,6 +149,12 @@ class LocalEXAONEClient:
         return resolve_device(torch, self.requested_device)
 
     def unload(self) -> None:
+        if self.backend == "mlx":
+            _run_on_mlx_thread(self._unload)
+        else:
+            self._unload()
+
+    def _unload(self) -> None:
         with self._lock:
             mx = self._torch if self.backend == "mlx" else None
             self._model = self._tokenizer = self._torch = None
@@ -272,6 +303,16 @@ class LocalEXAONEClient:
         return content
 
     def _chat_mlx(
+        self,
+        conversation: list[dict[str, str]],
+        *,
+        max_new_tokens: int | None,
+    ) -> str:
+        return _run_on_mlx_thread(
+            self._chat_mlx_on_thread, conversation, max_new_tokens=max_new_tokens
+        )
+
+    def _chat_mlx_on_thread(
         self,
         conversation: list[dict[str, str]],
         *,
