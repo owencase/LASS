@@ -22,13 +22,20 @@ def render_editable_summary(
     key: str,
     theme: str = "dark",
     text_scale: int = 100,
+    streaming: bool = False,
+    progress: str = "",
+    error: str = "",
 ) -> Optional[dict[str, Any]]:
     return _inline_editor(
         mode="summary",
+        draft_key=key,
         text=summary,
         segments=[],
         theme_mode=theme,
         text_scale=text_scale,
+        streaming=streaming,
+        progress=progress,
+        error=error,
         default=None,
         key=key,
         tab_index=0,
@@ -44,6 +51,7 @@ def render_editable_transcript(
 ) -> Optional[dict[str, Any]]:
     return _inline_editor(
         mode="transcript",
+        draft_key=key,
         text="",
         segments=[
             {"start": segment.start, "end": segment.end, "text": segment.text}
@@ -68,6 +76,7 @@ def render_memo_editor(
     """Render the memo editor with formatting tools and debounced auto-save."""
     return _inline_editor(
         mode="memo",
+        draft_key=key,
         text=text,
         segments=[],
         theme_mode=theme,

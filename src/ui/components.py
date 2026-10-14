@@ -8,7 +8,6 @@ from typing import Iterable
 
 import streamlit as st
 
-from src.llm import ModelStatus
 from src.storage import LectureRecord, LectureSegment
 
 
@@ -101,7 +100,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         """
         + """
         html, body, [class*="css"] {
-            font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-family: Inter, Pretendard, "Segoe UI", sans-serif;
         }
         html, body, #root, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
             height:100%; min-height:0; overflow:hidden !important;
@@ -115,7 +114,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             background:var(--bg);
         }
         .stMainBlockContainer {
-            width: 100%; height:100%; min-height:0; overflow:hidden;
+            width:100%; height:100%; min-height:0; overflow:hidden;
             max-width:none;
             padding:0;
         }
@@ -145,15 +144,14 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .lass-global-brand small {
             display:block; margin-top:.2rem; color:var(--muted); font-size:.56rem; letter-spacing:.08em;
         }
-        .st-key-lass-header-menu button,
-        .st-key-lass-header-settings button {
+        .st-key-lass-header-menu button {
             width:2.15rem !important; min-height:2.15rem !important; height:2.15rem !important;
             padding:0 !important; justify-content:center !important;
         }
         .st-key-lass-layout {
-            flex:0 0 calc(100vh - 3.5rem); width:100%;
-            height:calc(100vh - 3.5rem) !important;
-            min-height:calc(100vh - 3.5rem); overflow:hidden;
+            flex:0 0 100vh; width:100%;
+            height:100vh !important;
+            min-height:100vh; overflow:hidden;
         }
         .st-key-lass-layout-toolbar {
             flex:0 0 auto; margin:-.2rem 0 .75rem; padding:.55rem .65rem .45rem;
@@ -205,17 +203,56 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             max-height:min(62vh, 36rem); overflow-y:auto;
             scrollbar-width:thin; scrollbar-color:var(--line) transparent;
         }
+        /* Streamlit fragments wrap their content in one additional container. */
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"],
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+            flex:1 1 0; height:100%; min-height:0; gap:0 !important; overflow:hidden;
+        }
         .st-key-lass-workspace-pane {
             height:100%; min-height:0; overflow-y:auto; overflow-x:hidden;
             padding:.7rem 1rem 1rem; border:0;
-            background:var(--bg); scrollbar-gutter:stable;
+            background:var(--bg); scrollbar-gutter:auto;
             scrollbar-width:thin; scrollbar-color:var(--line) transparent;
+        }
+        .st-key-lass-workspace-pane:has(.st-key-lass-quiz-view) > [data-testid="stLayoutWrapper"],
+        .st-key-lass-workspace-pane:has(.st-key-lass-chat-view) > [data-testid="stLayoutWrapper"] {
+            height:auto; flex:none; overflow:visible;
+        }
+        .st-key-lass-workspace-pane:has(.st-key-lass-quiz-view),
+        .st-key-lass-workspace-pane:has(.st-key-lass-chat-view) {
+            display:block; overflow-y:auto; padding:1rem;
+        }
+        .st-key-lass-quiz-view label[data-testid="stRadioOption"] > div > div:first-child {
+            width:1.1rem; height:1.1rem; border:2px solid var(--control-border);
+            background:var(--field); box-shadow:none;
+        }
+        .st-key-lass-quiz-view label[data-testid="stRadioOption"]:has(input:checked) > div > div:first-child {
+            border-color:var(--accent); background:var(--accent);
+        }
+        .st-key-lass-quiz-view label[data-testid="stRadioOption"] > div > div:first-child > div {
+            width:.45rem; height:.45rem; background:transparent;
+        }
+        .st-key-lass-quiz-view label[data-testid="stRadioOption"]:has(input:checked) > div > div:first-child > div {
+            background:var(--control-mark);
+        }
+        .st-key-quiz-omr-sheet label[data-testid="stRadioOption"] {
+            padding:.3rem .55rem; border:1px solid var(--control-border); border-radius:.6rem;
+        }
+        .st-key-quiz-omr-sheet label[data-testid="stRadioOption"]:has(input:checked) {
+            border-color:var(--accent); background:var(--accent-soft);
+        }
+        .st-key-quiz-omr-sheet label[data-testid="stRadioOption"]:has(input:focus-visible) {
+            outline:2px solid var(--accent); outline-offset:2px;
+        }
+        .st-key-lass-workspace-pane:has(.st-key-lass-quiz-view) > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"],
+        .st-key-lass-workspace-pane:has(.st-key-lass-chat-view) > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+            height:auto; flex:none; overflow:visible;
         }
         .st-key-lass-ai-pane {
             height:100%; min-height:0; overflow-y:auto; overflow-x:hidden;
             padding:.75rem;
             border-left:1px solid var(--line); border-radius:0;
-            background:var(--panel); scrollbar-gutter:stable;
+            background:var(--panel); scrollbar-gutter:auto;
             scrollbar-width:thin; scrollbar-color:var(--line) transparent;
         }
         .st-key-lass-library-scroll {
@@ -230,12 +267,15 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             color:var(--text); font-size:.84rem; font-weight:700;
             overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
         }
-        .st-key-toggle-library-panel {
-            width:2.35rem !important; height:2.35rem !important; margin:0 !important;
+        .st-key-toggle-library-panel,
+        .st-key-toggle-right-panel {
+            display:flex; align-items:center; justify-content:center;
+            width:2rem !important; height:2rem !important; margin:0 !important;
         }
-        .st-key-toggle-library-panel button {
-            width:2.35rem !important; height:2.35rem !important; min-height:2.35rem !important;
-            padding:0 !important; text-align:center !important; justify-content:center;
+        .st-key-toggle-library-panel button,
+        .st-key-toggle-right-panel button {
+            width:2rem !important; height:2rem !important; min-height:2rem !important;
+            padding:0 !important; text-align:center !important; justify-content:center !important;
             border-color:var(--line) !important; background:var(--panel) !important;
             box-shadow:none; font-size:1rem;
         }
@@ -277,30 +317,6 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [data-testid="stMarkdownContainer"], [data-testid="stWidgetLabel"],
         [data-testid="stCaptionContainer"] { color: var(--text); }
         [data-testid="stCaptionContainer"], .stCaption { color: var(--muted) !important; }
-
-        .lass-topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            min-height: 3.7rem;
-            margin-bottom: .9rem;
-            padding: 0 .35rem .85rem;
-            border-bottom:1px solid var(--line);
-        }
-        .lass-brand { display:flex; align-items:center; gap:.72rem; }
-        .lass-logo {
-            display:grid; place-items:center; width:2.15rem; height:2.15rem;
-            border-radius:.72rem; color:var(--primary-text); background:var(--accent);
-            box-shadow:0 0 28px var(--accent-soft); font-size:.76rem; font-weight:900;
-        }
-        .lass-brand b { display:block; font-size:.93rem; letter-spacing:.09em; }
-        .lass-brand span { color:var(--muted); font-size:.72rem; }
-        .lass-top-meta { display:flex; align-items:center; gap:.65rem; color:var(--muted); font-size:.74rem; }
-        .lass-chip {
-            display:inline-flex; align-items:center; gap:.45rem; padding:.42rem .68rem;
-            border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.025);
-        }
-        .lass-chip i { width:.4rem; height:.4rem; border-radius:50%; background:var(--ready-text); }
 
         .lass-pane-title {
             display:flex; align-items:center; justify-content:space-between; min-height:2rem;
@@ -373,6 +389,10 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [data-testid="stAlertContainer"] *, [role="dialog"] *,
         [data-baseweb="notification"] *, [data-baseweb="tooltip"] *,
         [data-testid="stTooltipContent"] * { color:var(--text) !important; }
+        [data-baseweb="tooltip"], [role="tooltip"],
+        [data-testid="stTooltipContent"] {
+            display:none !important; visibility:hidden !important;
+        }
         [data-testid="stAlertContainer"] a, [data-testid="stToast"] a {
             color:var(--accent) !important;
         }
@@ -400,6 +420,17 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [data-baseweb="popover"] > div {
             color:var(--text) !important; background:var(--panel) !important;
         }
+
+
+
+
+
+
+
+
+
+
+
         [data-testid="stFormSubmitButton"] button {
             color:var(--text) !important; background:var(--panel-2) !important; border-color:var(--line) !important;
         }
@@ -409,6 +440,10 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             padding:.25rem; border:1px solid var(--line); border-radius:.9rem;
             background:rgba(255,255,255,.018);
         }
+        [data-testid="stFileUploader"] :is(p, span, small, label, svg, [data-testid="stIconMaterial"]) {
+            color:var(--text) !important;
+        }
+        [data-testid="stFileUploader"] svg { fill:currentColor !important; }
         [data-testid="stFileUploaderDropzone"] {
             min-height:7.4rem; border:1px dashed var(--line); border-radius:.7rem;
             background:var(--field);
@@ -427,6 +462,15 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         [data-testid="stFileUploaderDropzone"] span:first-child {
             color:var(--text) !important;
+        }
+        /* The document dialog uses the whole dropzone as its file picker. */
+        [role="dialog"] [data-testid="stFileUploaderDropzone"][aria-label="PDF · PowerPoint"] > span {
+            position:absolute !important; width:1px !important; height:1px !important;
+            overflow:hidden !important; clip-path:inset(50%) !important;
+            white-space:nowrap !important;
+        }
+        [role="dialog"] [data-testid="stFileUploaderDropzone"][aria-label="PDF · PowerPoint"] {
+            position:relative; cursor:pointer;
         }
         [data-testid="stAudioInput"] {
             padding:.8rem; border:1px solid var(--line); border-radius:.9rem;
@@ -449,6 +493,18 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
             color:var(--text) !important; border-color:var(--line) !important;
             background:var(--panel-2) !important;
+        }
+        [data-testid="stSelectboxVirtualDropdown"] {
+            color:var(--text) !important; border:1px solid var(--line) !important;
+            background:var(--panel) !important; box-shadow:0 12px 30px rgba(15,23,42,.12) !important;
+        }
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"],
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"] * {
+            color:var(--text) !important;
+        }
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"][data-focused="true"],
+        [data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover {
+            background:var(--hover) !important;
         }
         li[role="option"] { color:var(--text) !important; background:var(--panel-2) !important; }
         li[role="option"]:hover, li[aria-selected="true"] { background:var(--hover) !important; }
@@ -659,12 +715,27 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         [data-baseweb="tab-highlight"] { background:var(--accent) !important; }
 
-        /* AI Lecture Notes reference shell */
+        /* Preserve the current frame while Streamlit prepares replacement deltas. */
+        .st-key-lass-layout [data-stale="true"] { opacity:1 !important; }
+        .st-key-lass-document-pane > [data-testid="stLayoutWrapper"]:has([data-testid="stCustomComponentV1"]),
+        .st-key-lass-document-pane > [data-testid="stElementContainer"]:has([data-testid="stCustomComponentV1"]) {
+            flex:1 1 0; height:100% !important; min-height:0; overflow:hidden;
+        }
+        .st-key-lass-document-pane:has([data-testid="stCustomComponentV1"]) { padding:0; }
+        .st-key-lass-document-pane [data-testid="stElementContainer"]:has([data-testid="stCustomComponentV1"]) > div { height:100% !important; }
+        .st-key-lass-document-pane [data-testid="stCustomComponentV1"],
+        .st-key-lass-document-pane [data-testid="stCustomComponentV1"] iframe {
+            display:block; height:100% !important; min-height:0; width:100%; border:0;
+        }
+        /* LASS workspace shell */
         .stMainBlockContainer { padding:0; }
         .stMainBlockContainer > [data-testid="stVerticalBlock"] { gap:0 !important; }
         .st-key-lass-layout {
-            flex:0 0 100vh; height:100vh !important; min-height:100vh;
+            flex:0 0 100vh; flex-basis:100dvh;
+            height:100vh !important; height:100dvh !important;
+            min-height:100vh; min-height:100dvh;
         }
+        .st-key-lass-layout-resizer,
         [class*="st-key-lass-layout-resizer-"] {
             position:absolute !important; width:0 !important; height:0 !important;
             min-height:0 !important; overflow:hidden !important;
@@ -683,9 +754,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-library-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-library-body) {
             flex:1 1 0; min-height:0; overflow:hidden;
         }
-        .st-key-lass-library-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-sidebar-footer) {
-            flex:0 0 4rem; height:4rem; overflow:visible;
-        }
+
         .st-key-lass-sidebar-header {
             height:3.5rem; padding:0 1rem; border-bottom:1px solid color-mix(in srgb,var(--line) 58%,transparent);
             background:var(--panel-2);
@@ -705,55 +774,45 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-library-body > [data-testid="stLayoutWrapper"]:has(.st-key-lass-library-content) {
             flex:1 1 0; min-height:0; overflow:hidden;
         }
-        .st-key-all-notes-button button,
-        .st-key-favorites-button button,
-        .st-key-recent-button button {
-            min-height:2.25rem; padding:0 .75rem; justify-content:flex-start !important;
-            border-color:transparent !important; color:var(--text) !important;
-            background:transparent !important; box-shadow:none; font-size:.78rem;
-            font-weight:500;
+        .st-key-lass-library-tools [data-testid="stHorizontalBlock"] {
+            gap:.45rem !important;
         }
-        .st-key-all-notes-button button[data-testid="stBaseButton-primary"],
-        .st-key-favorites-button button[data-testid="stBaseButton-primary"],
-        .st-key-recent-button button[data-testid="stBaseButton-primary"] {
-            border-color:#f1f5f9 !important; background:var(--panel) !important;
-            box-shadow:0 1px 3px rgba(15,23,42,.08); font-weight:600;
+        .st-key-chatting-button button,
+        .st-key-quiz-button button {
+            min-height:2.25rem; padding:0 .6rem; justify-content:center !important;
+            border:1px solid var(--line) !important; color:var(--text) !important;
+            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.08);
+            font-size:.72rem; font-weight:650;
         }
-        .st-key-all-notes-button button *,
-        .st-key-favorites-button button *,
-        .st-key-recent-button button * { color:var(--text) !important; }
+        .st-key-chatting-button button *,
+        .st-key-quiz-button button * { color:var(--text) !important; }
         .st-key-lass-library-body .lass-pane-title {
-            min-height:1.5rem; margin:.45rem 0 0; padding:0 .55rem;
+            min-height:1.5rem; margin:.45rem 0 .4rem; padding:0 .55rem;
+        }
+        .st-key-lass-library-body > [data-testid="stElementContainer"]:has(.lass-pane-title) {
+            margin-bottom:.75rem !important;
         }
         .st-key-lass-library-body .lass-pane-title b {
             color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.1em;
         }
         .st-key-lass-library-body .lass-pane-title span { display:none; }
         .st-key-lass-library-body input { min-height:2.25rem; font-size:.74rem; }
-        .st-key-lass-sidebar-footer {
-            height:4rem; padding:.7rem .75rem; border-top:1px solid color-mix(in srgb,var(--line) 58%,transparent);
-            background:var(--panel-2);
-        }
-        .st-key-lass-sidebar-footer > [data-testid="stLayoutWrapper"],
-        .st-key-lass-sidebar-footer [data-testid="stHorizontalBlock"] { height:100%; align-items:center; }
-        .lass-local-user { display:flex; align-items:center; gap:.55rem; }
-        .lass-local-user > span {
-            display:grid; place-items:center; width:2rem; height:2rem; border-radius:50%;
-            color:#fff; background:linear-gradient(135deg,var(--accent),var(--violet));
-            font-size:.62rem; font-weight:800;
-        }
-        .lass-local-user b, .lass-local-user small { display:block; }
-        .lass-local-user b { font-size:.72rem; }
-        .lass-local-user small { margin-top:.16rem; color:var(--muted); font-size:.58rem; }
 
+
+
+        /* Streamlit fragments wrap their content in one additional container. */
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"],
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+            flex:1 1 0; height:100%; min-height:0; gap:0 !important; overflow:hidden;
+        }
         .st-key-lass-workspace-pane {
             display:flex; height:100%; padding:0; overflow:hidden;
             border:0; background:var(--bg);
         }
-        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-center-header) {
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(.st-key-lass-center-header) {
             flex:0 0 3.5rem; height:3.5rem; overflow:hidden;
         }
-        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-memo-layout) {
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-memo-layout) {
             flex:1 1 0; min-height:0; overflow:hidden;
         }
         .st-key-lass-document-memo-layout {
@@ -782,16 +841,32 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-library-panel),
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-right-panel) {
-            flex:0 0 2rem !important; width:2rem !important;
+            display:flex; align-items:center; justify-content:center;
+            flex:0 0 2rem !important; width:2rem !important; height:2rem;
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-document-breadcrumb) {
-            flex:1 1 10rem !important; width:auto !important;
+            display:flex; align-self:center; align-items:center;
+            flex:1 1 10rem !important; width:auto !important; height:2rem; overflow:hidden;
+        }
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) > [data-testid="stVerticalBlock"],
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stElementContainer"],
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stMarkdown"],
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stMarkdown"] > div,
+        .st-key-lass-center-header [data-testid="stColumn"]:has(.lass-document-breadcrumb) [data-testid="stMarkdownContainer"] {
+            display:flex; align-items:center; width:100%; height:2rem; min-height:0;
+            margin:0 !important; padding:0 !important; gap:0 !important;
+        }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-center-layout) {
+            flex:0 0 7.4rem !important; width:7.4rem !important;
+        }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-document-actions) {
+            flex:0 0 7.4rem !important; width:7.4rem !important;
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-counter) {
             flex:0 0 6.5rem !important; width:6.5rem !important;
         }
         .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-zoom-value) {
-            flex:0 0 6.8rem !important; width:6.8rem !important;
+            flex:0 0 12rem !important; width:12rem !important;
             border-left:1px solid var(--line);
         }
         .st-key-lass-center-header button {
@@ -800,7 +875,16 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             background:transparent !important; box-shadow:none !important;
         }
         .st-key-toggle-library-panel button,
-        .st-key-toggle-right-panel button { width:2rem !important; height:2rem !important; min-height:2rem !important; }
+        .st-key-toggle-right-panel button {
+            display:flex !important; align-items:center !important; justify-content:center !important;
+            width:2rem !important; height:2rem !important; min-height:2rem !important;
+            padding:0 !important; gap:0 !important; line-height:1 !important;
+        }
+        .st-key-toggle-library-panel button [data-testid="stIconMaterial"],
+        .st-key-toggle-right-panel button [data-testid="stIconMaterial"] {
+            display:grid !important; place-items:center !important;
+            margin:0 !important; line-height:1 !important;
+        }
         .st-key-toggle-library-panel button p,
         .st-key-toggle-right-panel button p { display:none; }
         .st-key-toggle-library-panel button::before,
@@ -816,6 +900,17 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         [class*="st-key-pdf-zoom-in-"] button {
             width:2rem !important; min-width:2rem !important; padding:0 !important;
             color:var(--muted) !important; font-size:.9rem !important;
+        }
+        [class*="st-key-pdf-fit-toggle-"] button {
+            width:100% !important; min-width:0 !important; height:2rem !important;
+            padding:0 .35rem !important; border:1px solid var(--line) !important;
+            border-radius:.38rem !important; color:var(--text) !important;
+            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+            font-size:.64rem !important; font-weight:750 !important;
+        }
+        [class*="st-key-pdf-fit-toggle-"] button[data-testid="stBaseButton-primary"] {
+            border-color:var(--accent) !important; color:var(--accent) !important;
+            background:var(--accent-soft) !important;
         }
         .lass-pdf-counter, .lass-pdf-zoom-value {
             display:flex; align-items:center; justify-content:center; height:2rem; min-height:0;
@@ -842,6 +937,9 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             position:relative; display:flex; flex-direction:column; width:100%; height:100%;
             min-height:0; margin:0; padding:1.25rem; gap:0 !important;
             overflow:auto; background:var(--bg);
+        }
+        .st-key-lass-document-pane:has(.lass-pdf-stage) {
+            padding:0; overflow:hidden;
         }
         .st-key-lass-document-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-empty-viewer) {
             flex:1 1 0; width:100%; height:100%; min-height:0; overflow:hidden;
@@ -870,31 +968,39 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-document-pane [data-testid="stMarkdownContainer"]:has(.lass-pdf-stage) {
             flex:1 1 0; width:100%; height:100%; min-height:0;
         }
-        .lass-pdf-stage {
-            display:flex; align-items:flex-start; justify-content:center; width:100%; height:100%;
-            min-height:0; padding:.5rem; overflow:auto;
+        .st-key-lass-document-pane .stMarkdown:has(.lass-pdf-stage) > div {
+            display:flex; flex:1 1 0; align-items:stretch; width:100%; height:100%; min-height:0; overflow:hidden;
         }
-        .lass-pdf-page {
-            display:block; width:auto; height:auto; max-width:100%; max-height:100%;
+        .st-key-lass-document-pane [data-testid="stMarkdownContainer"]:has(.lass-pdf-stage) {
+            margin:0 !important; overflow:hidden;
+        }
+        .lass-pdf-stage {
+            box-sizing:border-box; width:100%; height:100%; min-height:0; padding:0; overflow:hidden;
+            overscroll-behavior:none; touch-action:none;
+        }
+        .lass-pdf-stage.lass-panning { cursor:grabbing; user-select:none; }
+        .st-key-lass-document-pane .lass-pdf-page {
+            display:block; width:auto; height:auto; max-width:none !important; max-height:none !important;
+            margin:0 auto;
             object-fit:contain; border-radius:.125rem; background:var(--panel);
             box-shadow:0 8px 30px rgba(0,0,0,.08);
-            transform:scale(var(--lass-pdf-zoom,1)); transform-origin:top center;
+            pointer-events:none; user-select:none;
         }
 
         .st-key-lass-memo-pane {
             height:100%; margin:0; padding:0; gap:0 !important; overflow:hidden;
-            border-top:1px solid var(--line); background:var(--panel);
+            border:0; background:var(--panel);
         }
         .st-key-lass-memo-pane > [data-testid="stLayoutWrapper"]:first-child,
         .st-key-lass-memo-pane > [data-testid="stElementContainer"]:first-child {
-            flex:0 0 3rem; min-height:3rem; padding:.5rem 1.5rem .35rem;
+            flex:0 0 2.25rem; min-height:2.25rem; padding:.25rem 1.25rem;
             border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent);
         }
         .st-key-lass-memo-pane > [data-testid="stElementContainer"]:has(textarea) {
             flex:1 1 0; min-height:0; padding:.65rem 1.5rem;
         }
         .st-key-lass-memo-pane textarea {
-            min-height:6.5rem !important; height:6.5rem !important; padding:0 !important;
+            min-height:3.5rem !important; height:3.5rem !important; padding:0 !important;
             border:0 !important; border-radius:0; color:var(--text) !important;
             background:transparent !important; font-size:.82rem; line-height:1.6;
             resize:none;
@@ -905,9 +1011,9 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-memo-pane [data-testid="stTextAreaRootElement"] {
             border:0 !important; background:transparent !important;
         }
-        .lass-memo-title { display:flex; align-items:center; gap:.45rem; height:2rem; }
-        .lass-memo-title > span { color:var(--accent); font-size:1rem; }
-        .lass-memo-title b { font-size:.68rem; letter-spacing:.05em; }
+        .lass-memo-title { display:flex; align-items:center; gap:.4rem; height:1.75rem; }
+        .lass-memo-title > span { color:var(--accent); font-size:.85rem; }
+        .lass-memo-title b { font-size:.64rem; letter-spacing:.05em; }
         .lass-memo-title small { margin-left:auto; color:#16a34a; font-size:.56rem; }
         .st-key-lass-memo-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-memo-actions) {
             flex:0 0 3rem; min-height:3rem;
@@ -963,7 +1069,10 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         .st-key-lass-right-header button:hover { color:var(--text) !important; }
         .st-key-lass-right-header button[data-testid="stBaseButton-primary"]:hover { color:var(--violet) !important; }
         .st-key-lass-right-header button [data-testid="stIconMaterial"] { font-size:.95rem; }
-        .st-key-lass-sidebar-footer [data-testid="stPopover"] button svg { display:none; }
+
+
+
+
         .st-key-lass-transcript-stream, .st-key-lass-summary-stream {
             height:100%; padding:1rem; overflow:auto; background:var(--panel);
         }
@@ -972,19 +1081,35 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             visibility:hidden;
         }
         .st-key-lass-recording-actions {
-            position:static; margin:0; padding:1rem 1.5rem;
+            position:static; margin:0; padding:.7rem 1.25rem;
             border-top:1px solid color-mix(in srgb,var(--line) 58%,transparent);
-            background:color-mix(in srgb,var(--panel-2) 55%,var(--panel));
+            background:var(--panel);
         }
         .st-key-lass-summary-actions {
             position:static; margin:0; padding:.75rem 1rem;
             border-top:1px solid var(--line); background:var(--panel);
         }
         .st-key-lass-recording-actions [data-testid="stCustomComponentV1"] iframe {
-            min-height:9.5rem !important; height:9.5rem !important; border-radius:0;
+            min-height:7.375rem !important; height:7.375rem !important; border-radius:0;
+        }
+        /* A Streamlit fragment wraps both panes. Its footer must not size the whole fragment. */
+        .st-key-lass-ai-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-transcript-stream):has(.st-key-lass-recording-actions) {
+            flex:1 1 0 !important; min-height:0; overflow:hidden;
+        }
+        .st-key-lass-ai-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.st-key-lass-recording-actions) {
+            height:100%; min-height:0; flex:1 1 0; gap:0;
+        }
+        .st-key-lass-ai-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> .st-key-lass-transcript-stream) {
+            flex:1 1 0; min-height:0; overflow:hidden;
+        }
+        .st-key-lass-ai-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> .st-key-lass-recording-actions) {
+            flex:0 0 auto; min-height:0; margin-top:auto;
+        }
+        .st-key-lass-recording-actions {
+            flex:0 0 auto; max-height:calc(100vh - 3.5rem); overflow-y:auto;
         }
 
-        /* Sidebars float above the workspace so opening one never reflows the PDF or memo. */
+        /* The workspace uses the space fixed underneath the overlay drawers. */
         .st-key-lass-layout > [data-testid="stLayoutWrapper"],
         .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
             position:relative; width:100%; height:100%; min-height:0; overflow:hidden;
@@ -994,31 +1119,105 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         }
         .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             position:absolute !important; inset:0; width:100% !important; min-width:0 !important;
-            height:100%; margin:0 !important;
+            height:100%; margin:0 !important; pointer-events:none;
         }
         .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-workspace-pane) {
-            z-index:1;
+            z-index:1; left:0; right:0; width:100% !important;
         }
         .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-library-pane) {
-            right:auto; z-index:60; width:clamp(17rem,22vw,20rem) !important;
+            right:auto; z-index:60; width:var(--lass-sidebar-width,clamp(17rem,22vw,20rem)) !important;
             filter:drop-shadow(12px 0 18px rgba(15,23,42,.14));
         }
         .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-ai-pane) {
-            left:auto; z-index:55; width:clamp(21rem,29vw,27rem) !important;
+            left:auto; z-index:55; width:var(--lass-sidebar-width,clamp(21rem,29vw,27rem)) !important;
             filter:drop-shadow(-12px 0 18px rgba(15,23,42,.14));
         }
 
-        /* The only draggable divider is inside the center workspace. */
+        .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-workspace-pane, .st-key-lass-library-pane, .st-key-lass-ai-pane) > [data-testid="stVerticalBlock"] { pointer-events:auto; }
+        .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-library-pane),
+        .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-ai-pane) {
+            transition:transform .18s ease; will-change:transform;
+        }
+        .st-key-lass-layout:not([data-library-open="true"]) [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > .st-key-lass-library-pane) { transform:translateX(-105%); visibility:hidden; }
+        .st-key-lass-layout:not([data-right-open="true"]) [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > .st-key-lass-ai-pane) { transform:translateX(105%); visibility:hidden; }
+        /* Empty/hidden drawer wrappers must never intercept the workspace. */
+        .st-key-lass-layout:not([data-library-open="true"]) [data-testid="stColumn"]:has(.st-key-lass-library-pane),
+        .st-key-lass-layout:not([data-library-open="true"]) [data-testid="stColumn"]:has(.st-key-lass-library-pane) *,
+        .st-key-lass-layout:not([data-right-open="true"]) [data-testid="stColumn"]:has(.st-key-lass-ai-pane),
+        .st-key-lass-layout:not([data-right-open="true"]) [data-testid="stColumn"]:has(.st-key-lass-ai-pane) *,
+        .st-key-lass-layout:has(.st-key-lass-chat-view, .st-key-lass-quiz-view) > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
+        .st-key-lass-layout:has(.st-key-lass-chat-view, .st-key-lass-quiz-view) > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child * { pointer-events:none !important; }
+        .st-key-lass-panel-openers { position:fixed; inset:.5rem .65rem auto; height:0; z-index:80; pointer-events:none; }
+        .st-key-toggle-library-panel, .st-key-toggle-right-panel { position:fixed; top:.5rem; pointer-events:auto; }
+        .st-key-toggle-library-panel { left:.65rem; }
+        .st-key-toggle-right-panel { right:.65rem; }
+        body:has(.st-key-lass-layout[data-library-open="true"]) .st-key-toggle-library-panel,
+        body:has(.st-key-lass-layout[data-right-open="true"]) .st-key-toggle-right-panel { visibility:hidden; pointer-events:none; }
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-model-preparation) {
+            position:absolute; bottom:0; left:0; right:0; height:auto !important; flex:0 0 auto; z-index:4; pointer-events:none;
+        }
+        .st-key-lass-model-preparation { background:var(--bg); pointer-events:auto; }
+        .st-key-lass-model-preparation,
+        .st-key-lass-model-preparation > [data-testid="stLayoutWrapper"],
+        .st-key-lass-model-preparation > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+            height:auto !important; flex:0 0 auto !important;
+        }
+        .st-key-lass-center-header { padding-left:3rem; padding-right:3rem; }
+        .st-key-lass-chat-view, .st-key-lass-quiz-view { padding-top:2rem; }
+        body:has(.st-key-lass-chat-view) .st-key-toggle-right-panel,
+        body:has(.st-key-lass-quiz-view) .st-key-toggle-right-panel { visibility:hidden; pointer-events:none; }
+        @media(prefers-reduced-motion:reduce) { .st-key-lass-layout [data-testid="stColumn"] { transition:none !important; } }
+        .st-key-lass-library-pane, .st-key-lass-ai-pane { position:relative; }
+        .lass-sidebar-resizer {
+            position:absolute; top:0; bottom:0; width:10px; z-index:70;
+            cursor:col-resize; touch-action:none;
+        }
+        .lass-sidebar-left { right:0; }
+        .lass-sidebar-right { left:0; }
+        .lass-sidebar-resizer:hover, .lass-sidebar-resizer:focus-visible { background:var(--accent-soft); }
+        .st-key-lass-workspace-pane { container-type:inline-size; }
+        @container (max-width:850px) {
+            .st-key-lass-center-header { height:6rem; }
+            .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(.st-key-lass-center-header) { flex:0 0 6rem; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+                display:grid !important; grid-template-columns:2rem minmax(0,1fr) 7.4rem 7.4rem 2rem;
+                grid-template-rows:2rem 2rem; align-content:center; gap:.4rem .2rem !important;
+            }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+                width:100% !important; height:2rem; min-width:0;
+            }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-library-panel) { grid-column:1; grid-row:1; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-document-breadcrumb) { grid-column:2; grid-row:1; width:100% !important; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-center-layout) { grid-column:3; grid-row:1; width:100% !important; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-document-actions) { grid-column:4; grid-row:1; width:100% !important; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-toggle-right-panel) { grid-column:5; grid-row:1; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-counter) { grid-column:1 / span 2; grid-row:2; width:100% !important; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-zoom-value) { grid-column:3 / span 3; grid-row:2; width:100% !important; }
+        }
+        @container (max-width:480px) {
+            .st-key-lass-center-header { height:8.5rem; }
+            .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(.st-key-lass-center-header) { flex:0 0 8.5rem; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+                grid-template-columns:2rem minmax(0,1fr) 6.5rem 6.5rem 2rem;
+                grid-template-rows:2rem 2rem 2rem;
+            }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-counter) { grid-column:1 / -1; grid-row:2; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.lass-pdf-zoom-value) { grid-column:1 / -1; grid-row:3; }
+        }
+        .st-key-lass-center-header [class*="st-key-pdf-previous-"] button,
+        .st-key-lass-center-header [class*="st-key-pdf-next-"] button { width:2rem !important; }
+        /* Draggable dividers inside the center workspace. */
         .lass-center-resizer { position:relative; z-index:20; outline:none; touch-action:none; background:transparent; }
-        .lass-center-resizer span { position:absolute; display:block; background:#d8dee8; transition:background .12s ease; }
-        .lass-center-resizer:hover span, .lass-center-resizer.dragging span { background:#8b95a5; }
+        .lass-center-resizer span { display:none; }
+        .lass-center-resizer:hover, .lass-center-resizer.dragging,
+        .lass-center-resizer:focus-visible { background:var(--accent-soft); }
         .lass-horizontal-resizer { flex:0 0 5px; width:100%; height:5px; cursor:row-resize; }
         .lass-horizontal-resizer span { inset:2px 0; }
         .lass-vertical-resizer { grid-column:2; grid-row:1; width:5px; height:100%; cursor:col-resize; }
         .lass-vertical-resizer span { inset:0 2px; }
         .st-key-lass-document-memo-layout.lass-center-side-by-side {
             display:grid !important;
-            grid-template-columns:minmax(15rem,var(--lass-document-width,62%)) 5px minmax(13.75rem,1fr);
+            grid-template-columns:minmax(0,var(--lass-document-width,62%)) 5px minmax(0,1fr);
             grid-template-rows:minmax(0,1fr);
         }
         .st-key-lass-document-memo-layout.lass-center-side-by-side > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-pane) {
@@ -1028,12 +1227,19 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             grid-column:3; grid-row:1; width:100% !important; height:100% !important; min-height:0;
         }
         .st-key-lass-document-memo-layout.lass-center-side-by-side .st-key-lass-memo-pane {
-            border-top:0; border-left:1px solid var(--line);
+            border:0;
         }
 
         .st-key-toggle-library-panel button::before,
         .st-key-toggle-right-panel button::before { display:none !important; content:none !important; }
-        .st-key-toggle-center-layout button { min-width:5rem; }
+        .st-key-toggle-center-layout button,
+        .st-key-lass-document-actions button {
+            width:100% !important; min-width:0 !important; min-height:2rem; height:2rem;
+            padding:0 .55rem !important; border:1px solid var(--line) !important;
+            border-radius:.38rem !important; color:var(--text) !important;
+            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+            font-size:.68rem !important; font-weight:750 !important;
+        }
         .st-key-toggle-library-panel button p,
         .st-key-toggle-right-panel button p,
         .st-key-close-library-panel button p,
@@ -1044,32 +1250,109 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
             min-height:2rem !important; padding:0 !important; border:0 !important;
             background:transparent !important; box-shadow:none !important;
         }
-        .st-key-lass-sidebar-header [data-testid="stHorizontalBlock"] { height:100%; align-items:center; }
+        .st-key-close-library-panel button,
+        .st-key-close-right-panel button {
+            border:1px solid transparent !important; border-radius:.5rem !important;
+        }
+        .st-key-close-library-panel button:hover,
+        .st-key-close-right-panel button:hover {
+            border-color:var(--accent) !important; border-radius:.5rem !important;
+            background:var(--hover) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+        }
+        .st-key-lass-sidebar-header { padding:0 0 0 1rem; }
+        .st-key-lass-sidebar-header [data-testid="stHorizontalBlock"] {
+            display:flex !important; height:3.5rem; align-items:center;
+            flex-wrap:nowrap !important; gap:0 !important;
+        }
+        .st-key-lass-right-header [data-testid="stHorizontalBlock"] {
+            display:flex !important; flex-wrap:nowrap !important;
+        }
+        .st-key-lass-sidebar-header [data-testid="stColumn"]:not(:has(.st-key-close-library-panel)),
+        .st-key-lass-right-header [data-testid="stColumn"]:not(:has(.st-key-close-right-panel)) {
+            flex:1 1 0 !important; width:auto !important; min-width:0 !important;
+        }
+        .st-key-lass-sidebar-header [data-testid="stColumn"]:has(.st-key-close-library-panel),
         .st-key-lass-right-header [data-testid="stColumn"]:has(.st-key-close-right-panel) {
-            flex:0 0 2.4rem !important; width:2.4rem !important;
+            display:flex; align-items:center; justify-content:center;
+            flex:0 0 3.5rem !important; width:3.5rem !important; height:3.5rem;
+        }
+        .st-key-close-library-panel,
+        .st-key-close-right-panel {
+            display:flex; align-items:center; justify-content:center;
+            width:100%; height:3.5rem; margin:0 !important;
+        }
+        .st-key-close-library-panel button,
+        .st-key-close-right-panel button {
+            display:flex !important; align-items:center !important; justify-content:center !important;
+            margin:0 auto !important; gap:0 !important; line-height:1 !important;
+        }
+        .st-key-close-library-panel button [data-testid="stIconMaterial"],
+        .st-key-close-right-panel button [data-testid="stIconMaterial"] {
+            display:grid !important; place-items:center !important;
+            margin:0 !important; line-height:1 !important;
+        }
+        /* Keep button labels accessible without leaving an invisible flex item beside the icon. */
+        .st-key-toggle-library-panel button,
+        .st-key-toggle-right-panel button,
+        .st-key-close-library-panel button,
+        .st-key-close-right-panel button { position:relative !important; }
+        .st-key-toggle-library-panel button [data-testid="stMarkdownContainer"],
+        .st-key-toggle-right-panel button [data-testid="stMarkdownContainer"],
+        .st-key-close-library-panel button [data-testid="stMarkdownContainer"],
+        .st-key-close-right-panel button [data-testid="stMarkdownContainer"] {
+            position:absolute !important; width:1px !important; height:1px !important;
+            overflow:hidden !important; clip-path:inset(50%) !important;
+            white-space:nowrap !important;
+        }
+        .st-key-toggle-library-panel button p,
+        .st-key-toggle-right-panel button p,
+        .st-key-close-library-panel button p,
+        .st-key-close-right-panel button p { display:block !important; }
+
+        /* Use one visual treatment for all four panel open/close controls. */
+        .st-key-toggle-library-panel button,
+        .st-key-close-library-panel button,
+        .st-key-toggle-right-panel button,
+        .st-key-close-right-panel button {
+            width:2rem !important; min-width:2rem !important;
+            height:2rem !important; min-height:2rem !important;
+            padding:0 !important; border:1px solid transparent !important;
+            border-radius:.5rem !important; background:transparent !important;
+            box-shadow:none !important; color:var(--muted) !important;
+        }
+        .st-key-toggle-library-panel button:hover,
+        .st-key-close-library-panel button:hover,
+        .st-key-toggle-right-panel button:hover,
+        .st-key-close-right-panel button:hover {
+            border-color:var(--accent) !important; background:var(--hover) !important;
+            box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
+            color:var(--text) !important;
+        }
+        .st-key-toggle-library-panel button [data-testid="stIconMaterial"],
+        .st-key-close-library-panel button [data-testid="stIconMaterial"],
+        .st-key-toggle-right-panel button [data-testid="stIconMaterial"],
+        .st-key-close-right-panel button [data-testid="stIconMaterial"] {
+            display:grid !important; place-items:center !important;
+            width:1.125rem !important; height:1.125rem !important;
+            margin:0 !important; font-size:1.125rem !important; line-height:1 !important;
+            font-variation-settings:'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
         }
 
         /* 100% fits the whole page; other values scale from that fitted page. */
         .st-key-lass-document-actions {
-            display:flex !important; position:absolute; z-index:15; top:1rem; right:1rem;
-            justify-content:flex-end; width:auto; height:auto; overflow:visible;
+            display:flex !important; align-items:center; width:100%; height:100%; overflow:visible;
         }
         [class*="st-key-document-upload-"] { display:block !important; }
         .st-key-lass-document-actions button {
-            min-height:2rem; height:2rem; padding:0 .7rem; border-color:var(--line) !important;
-            background:var(--panel) !important; box-shadow:0 1px 3px rgba(15,23,42,.1) !important;
-        }
-        .st-key-lass-document-empty-viewer .st-key-lass-document-actions {
-            position:relative; inset:auto; justify-content:center; width:auto; height:auto;
-        }
-        .st-key-lass-document-empty-viewer > [data-testid="stLayoutWrapper"]:has(.st-key-lass-document-actions),
-        .st-key-lass-document-empty-viewer > [data-testid="stElementContainer"]:has(.st-key-lass-document-actions) {
-            flex:0 0 auto; width:auto; height:auto; overflow:visible;
+            overflow:hidden;
         }
 
         .st-key-lass-memo-pane > [data-testid="stElementContainer"]:has([data-testid="stCustomComponentV1"]),
         .st-key-lass-memo-pane > [data-testid="stLayoutWrapper"]:has([data-testid="stCustomComponentV1"]) {
             flex:1 1 0; width:100%; height:100%; min-height:0; overflow:hidden;
+        }
+        .st-key-lass-memo-pane > [data-testid="stElementContainer"]:has([data-testid="stCustomComponentV1"]) > div {
+            height:100% !important; min-height:0 !important;
         }
         .st-key-lass-memo-pane [data-testid="stCustomComponentV1"],
         .st-key-lass-memo-pane [data-testid="stCustomComponentV1"] iframe {
@@ -1080,7 +1363,7 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         @media (max-width: 760px) {
             .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-library-pane),
             .st-key-lass-layout > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-ai-pane) {
-                width:min(92vw,23rem) !important;
+                width:min(92vw,var(--lass-sidebar-width,23rem)) !important;
             }
         }
         ::-webkit-scrollbar { width:6px; height:6px; }
@@ -1088,43 +1371,117 @@ def inject_theme(theme_mode: str = "dark", text_scale: int = 100) -> None:
         ::-webkit-scrollbar-thumb { border-radius:10px; background:#cbd5e1; }
         ::-webkit-scrollbar-thumb:hover { background:#94a3b8; }
 
-        .lass-model { display:flex; justify-content:space-between; gap:.75rem; }
-        .lass-model b { font-size:.75rem; }
-        .lass-model span { display:block; color:var(--muted); font-size:.63rem; }
-        .lass-ready { color:var(--ready-text) !important; }
-        .lass-missing { color:var(--danger) !important; }
-
         @media (max-width: 980px) {
             .stMainBlockContainer { padding:0; }
-            .lass-top-meta > span { display:none; }
             .lass-empty { min-height:20rem; }
             .st-key-lass-layout {
-                flex-basis:100vh; height:100vh !important; min-height:100vh;
+                flex:0 0 100vh; flex-basis:100dvh;
+                height:100vh !important; height:100dvh !important;
+                min-height:100vh; min-height:100dvh;
             }
         }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
         }
+        /* Compact document controls stay together at the center of the toolbar. */
+        .st-key-lass-center-header { height:3.5rem; padding:.4rem 3.2rem; }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+            display:grid !important; grid-template-columns:minmax(0,1fr) 6.5rem 8rem minmax(0,1fr); grid-template-rows:2rem; gap:.2rem !important;
+        }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            width:auto !important; min-width:0; height:2rem; grid-row:1 !important; grid-column:auto !important;
+        }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(1) { grid-column:1 !important; }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) { grid-column:2 !important; }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3) { grid-column:3 !important; border:0; }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) { grid-column:4 !important; justify-self:end; width:7.4rem !important; margin-right:7.6rem; }
+        .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(5) { grid-column:4 !important; justify-self:end; width:7.4rem !important; }
+        .lass-document-breadcrumb > span, .lass-document-breadcrumb > i, .lass-document-breadcrumb > em { display:none; }
+        .lass-document-breadcrumb b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .st-key-chat-close, .st-key-quiz-close { position:fixed; top:.5rem; left:.65rem; pointer-events:auto; }
+        .st-key-chat-close button, .st-key-quiz-close button { border:0; background:var(--panel); font-size:.8rem; }
+        .st-key-lass-recorder-host { position:fixed; left:-10000px; top:0; height:118px; z-index:65; visibility:hidden; pointer-events:none; background:var(--panel); }
+        .st-key-lass-recorder-host iframe { height:118px !important; min-height:118px !important; width:100%; }
+        .st-key-lass-workspace-pane:has(.st-key-lass-chat-view) { display:flex; padding:0; overflow:hidden; }
+        .st-key-lass-workspace-pane:has(.st-key-lass-chat-view) > [data-testid="stLayoutWrapper"],
+        .st-key-lass-workspace-pane:has(.st-key-lass-chat-view) > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] { height:100%; flex:1; min-height:0; }
+        .st-key-lass-chat-view { height:100%; max-width:850px; margin:auto; padding:3.2rem 1.5rem 1.1rem; }
+        .st-key-lass-chat-view > [data-testid="stLayoutWrapper"] { height:auto; min-height:0; flex:0 0 auto; }
+        .st-key-lass-chat-view > [data-testid="stLayoutWrapper"]:has(> .st-key-lass-chat-thread) { height:auto; flex:1 1 0; min-height:0; overflow-y:auto; scrollbar-width:thin; }
+        .st-key-lass-chat-heading { padding-bottom:.7rem; border-bottom:1px solid var(--line); }
+        .st-key-lass-chat-heading p { margin:0; }
+        .st-key-lass-chat-thread { padding:.5rem 0; }
+        .lass-chat-welcome { padding:12vh 0 3rem; text-align:center; }
+        .lass-chat-welcome > span { font-size:3rem; color:var(--accent); }
+        .lass-chat-welcome h1 { font-size:clamp(1.5rem,3vw,2.2rem); font-weight:600; margin:.6rem 0; }
+        .lass-chat-welcome p { color:var(--muted); line-height:1.9; }
+        .st-key-lass-chat-view [data-testid="stChatMessage"] { background:transparent; padding:1rem .5rem; border-radius:1.2rem; }
+        .st-key-lass-chat-view [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) { background:var(--panel-2); }
+        .st-key-lass-chat-view [data-testid="stChatMessage"] {
+            width:fit-content; max-width:88%; align-self:flex-start; background:var(--panel);
+            border:1px solid var(--line); overflow-wrap:anywhere;
+        }
+        .st-key-lass-chat-view [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+            margin-left:auto; align-self:flex-end;
+        }
+        .st-key-lass-chat-view [data-testid="stChatMessage"]:has([aria-label="Chat message from user"]) {
+            margin-left:auto; align-self:flex-end; background:var(--panel-2);
+        }
+        .st-key-lass-chat-view > [data-testid="stLayoutWrapper"],
+        .st-key-lass-chat-view > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+            height:100%; flex:1; min-height:0;
+        }
+        .st-key-lass-chat-view > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> .st-key-lass-chat-thread) {
+            flex:1 1 0; min-height:0; overflow-y:auto; scrollbar-width:thin;
+        }
+        .st-key-chat-close { left:auto; right:.65rem; }
+        .st-key-chat-close button { width:2rem; min-width:2rem; padding:0; }
+        .st-key-chat-close button p { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+        .st-key-toggle-chat-panel { position:fixed; top:.5rem; left:.65rem; pointer-events:auto; }
+        .st-key-lass-layout:has(.st-key-lass-chat-view) .st-key-lass-library-pane { padding:0; overflow:hidden; }
+        .st-key-lass-layout:has(.st-key-lass-chat-view) .st-key-lass-library-pane > [data-testid="stLayoutWrapper"]:has(.st-key-lass-chat-panel-header),
+        .st-key-clear-global-chat { flex:0 0 auto; }
+        .st-key-chat-session-tree { flex:1 1 0 !important; min-height:0; overflow:hidden; }
+        .st-key-chat-session-tree > div, .st-key-chat-session-tree iframe { height:100% !important; min-height:0 !important; }
+        .st-key-lass-chat-panel-header {
+            padding:0 .75rem 0 1rem; height:3.5rem; flex:none;
+            border-bottom:1px solid var(--line);
+        }
+        .st-key-lass-chat-panel-header [data-testid="stHorizontalBlock"] { height:3.5rem; align-items:center; }
+        .st-key-lass-chat-panel-header [data-testid="stColumn"] { height:3.5rem; }
+        .st-key-lass-chat-panel-header [data-testid="stColumn"] > [data-testid="stVerticalBlock"] { height:100%; justify-content:center; }
+        .st-key-close-chat-panel button, .st-key-toggle-chat-panel button {
+            min-width:2rem; width:2rem; min-height:2rem; height:2rem;
+            padding:0; border:1px solid transparent; border-radius:.5rem;
+            background:transparent; box-shadow:none; color:var(--muted); gap:0;
+        }
+        .st-key-close-chat-panel button p, .st-key-toggle-chat-panel button p {
+            position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%);
+        }
+        .st-key-close-chat-panel button:hover, .st-key-toggle-chat-panel button:hover { background:var(--hover); border-color:var(--accent); color:var(--text); }
+        .st-key-clear-global-chat { padding:.75rem; }
+        .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > .st-key-lass-quiz-view { gap:.45rem !important; padding-top:2.5rem; max-width:1200px; margin:auto; }
+        .st-key-quiz-question-sheet, .st-key-quiz-omr-sheet { padding:1rem; background:var(--panel); border:1px solid var(--line); border-radius:.75rem; }
+        .st-key-quiz-question-sheet { gap:.4rem !important; }
+        .st-key-quiz-question-sheet hr { margin:.6rem 0; border-color:var(--line); }
+        .st-key-quiz-question-sheet [data-testid="stText"] { white-space:pre-wrap; overflow-wrap:anywhere; font-family:inherit; }
+        .st-key-quiz-close { left:auto; right:.65rem; }
+        @media (min-width:761px) {
+            .st-key-lass-layout[data-library-open="true"]:has(.st-key-lass-chat-view, .st-key-lass-quiz-view) > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-lass-workspace-pane) {
+                left:var(--lass-sidebar-width,300px); width:calc(100% - var(--lass-sidebar-width,300px)) !important;
+            }
+        }
+        .st-key-lass-chat-view [data-testid="stChatInput"] { border-radius:1.4rem; border:1px solid var(--line); box-shadow:0 4px 20px #00000008; }
+        @container (max-width:1000px) {
+            .st-key-lass-center-header { height:6rem; }
+            .st-key-lass-workspace-pane > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(.st-key-lass-center-header) { flex:0 0 6rem; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] { grid-template-columns:minmax(0,1fr) 7.4rem 7.4rem; grid-template-rows:2rem 2rem; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) { grid-column:2 !important; margin:0; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(5) { grid-column:3 !important; }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) { grid-column:1 / -1 !important; grid-row:2 !important; justify-self:center; width:6.5rem !important; transform:translateX(-4.1rem); }
+            .st-key-lass-center-header > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3) { grid-column:1 / -1 !important; grid-row:2 !important; justify-self:center; width:8rem !important; transform:translateX(3.35rem); }
+        }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_topbar(model_ready: bool, note_count: int) -> None:
-    state = "LOCAL AI READY" if model_ready else "MODEL SETUP REQUIRED"
-    st.markdown(
-        f"""
-        <div class="lass-topbar">
-            <div class="lass-brand">
-                <div class="lass-logo">LA</div>
-                <div><b>LASS</b><span>LOCAL NOTE INTELLIGENCE WORKSPACE</span></div>
-            </div>
-            <div class="lass-top-meta">
-                <span>{note_count}개의 노트가 로컬에 저장됨</span>
-                <div class="lass-chip"><i></i>{state}</div>
-            </div>
-        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -1200,21 +1557,6 @@ def render_timeline(segments: Iterable[LectureSegment]) -> None:
     st.markdown(f'<div class="lass-timeline">{rows}</div>', unsafe_allow_html=True)
 
 
-def render_model_status(status: ModelStatus, model_name: str = "EXAONE 4.0 · 1.2B") -> None:
-    label = "READY" if status.ready else "MISSING"
-    css_class = "lass-ready" if status.ready else "lass-missing"
-    meta = status.size_label if status.ready else "모델 준비 필요"
-    st.markdown(
-        f"""
-        <div class="lass-model">
-            <div><b>{escape(model_name)}</b><span>{escape(meta)} · ON DEVICE</span></div>
-            <b class="{css_class}">{label}</b>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def render_info(title: str, copy: str) -> None:
     st.markdown(
         f'<div class="lass-info"><b>{escape(title)}</b>{escape(copy)}</div>',
@@ -1235,6 +1577,9 @@ def render_error(message: str) -> None:
 
 def build_markdown_export(lecture: LectureRecord) -> str:
     """Build an on-demand export without creating a second source of truth."""
+    pages = getattr(lecture, "document_pages", None)
+    transcript = "\n\n".join([lecture.transcript] +
+        ([f"## {page['name']}\n\n{page['text']}" for page in pages()] if callable(pages) else [])).strip()
     lines = [
         f"# {lecture.title}",
         "",
@@ -1248,7 +1593,7 @@ def build_markdown_export(lecture: LectureRecord) -> str:
         "",
         "## 전사 · 추출 텍스트",
         "",
-        lecture.transcript or "아직 전사하거나 추출한 텍스트가 없습니다.",
+        transcript or "아직 전사하거나 추출한 텍스트가 없습니다.",
         "",
         "## 내 메모",
         "",

@@ -2,10 +2,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.rag import SQLiteVectorStore, TextChunk
+from src.rag import SQLiteVectorStore, SQLiteTextStore, TextChunk
 
 
 class SQLiteVectorStoreTests(unittest.TestCase):
+    def test_legacy_cleanup_is_safe_for_fts_only_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "vectors.db"
+            text = SQLiteTextStore(path, "folder-test")
+            text.upsert_stream([TextChunk(0, "보존할 원문", 0, 6)])
+            self.assertFalse(SQLiteVectorStore.delete_collection(path, "folder-test"))
+            self.assertEqual(text.count(), 1)
+            self.assertTrue(SQLiteTextStore.delete_collection(path, "folder-test"))
+
     def test_search_and_collection_delete_use_one_database_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

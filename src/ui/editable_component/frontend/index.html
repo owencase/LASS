@@ -26,7 +26,7 @@
       --hover:#eef2f7;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; color: var(--text); background: transparent; font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:calc(16px * var(--scale)); }
+    html, body { margin: 0; color: var(--text); background: transparent; font-family: Inter, Pretendard, "Segoe UI", sans-serif; font-size:calc(16px * var(--scale)); }
     body { overflow: hidden; opacity:0; }
     body.ready { opacity:1; }
     #app { width: 100%; }
@@ -77,13 +77,29 @@
     .time-inputs input { margin-top: 4px; padding: 8px; color: var(--accent); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
     .segment-editor textarea { min-height: 96px; }
     .memo-editor { display:flex; flex-direction:column; height:100vh; min-height:120px; background:var(--panel); }
-    .memo-toolbar { display:flex; flex:0 0 40px; align-items:center; gap:3px; padding:4px 8px; border-bottom:1px solid var(--line); background:var(--panel-2); }
-    .memo-toolbar button { min-width:32px; height:30px; padding:0 8px; border:0; background:transparent; font-weight:650; }
+    .memo-toolbar { display:flex; flex:0 0 34px; align-items:center; gap:2px; padding:2px 6px; border-bottom:1px solid var(--line); background:var(--panel-2); }
+    .memo-toolbar button { min-width:26px; height:28px; padding:0 5px; border:0; background:transparent; font-weight:650; }
+    .memo-toolbar button[aria-label="기울이기"] { font-style:italic; }
+    .memo-toolbar button[aria-label="밑줄"] { text-decoration:underline; text-underline-offset:2px; }
     .memo-toolbar button:hover { border:0; background:var(--hover); }
-    .memo-toolbar .memo-status { margin-left:auto; color:var(--muted); font-size:10px; font-weight:600; }
+    .memo-toolbar .memo-status { margin-left:auto; color:var(--muted); font-size:9px; font-weight:600; white-space:nowrap; }
     .memo-toolbar .memo-status.saving { color:var(--accent); }
-    .memo-field { flex:1 1 0; min-height:0; padding:14px 16px; border:0; border-radius:0; background:transparent; resize:none; font-size:13px; line-height:1.65; }
-    .memo-field:focus { border:0; outline:0; box-shadow:none; }
+    .memo-field { flex:1 1 0; min-height:0; padding:12px 14px; overflow:auto; color:var(--text); background:transparent; font-size:13px; line-height:1.65; outline:0; overflow-wrap:anywhere; }
+    .memo-field:empty::before { color:var(--muted); content:attr(data-placeholder); pointer-events:none; }
+    .memo-field p { margin:.35em 0; }
+    .memo-field p:first-child { margin-top:0; }
+    .memo-field strong, .memo-field b { color:var(--text); font-weight:750; }
+    .memo-field ul, .memo-field ol { margin:.35em 0; padding-left:22px; }
+    .memo-field li { margin:.2em 0; }
+    .memo-field li[data-checklist] { margin-left:-18px; list-style:none; }
+    .memo-field font[size="1"] { font-size:10px; }
+    .memo-field font[size="2"] { font-size:12px; }
+    .memo-field font[size="3"] { font-size:13px; }
+    .memo-field font[size="4"] { font-size:16px; }
+    .memo-field font[size="5"] { font-size:20px; }
+    .memo-field font[size="6"] { font-size:24px; }
+    .memo-field font[size="7"] { font-size:28px; }
+    .memo-check { display:inline-block; width:1.25rem; color:var(--accent); font-weight:700; user-select:none; }
   </style>
 </head>
 <body>
@@ -94,6 +110,21 @@
     let editing = null;
     let contentSignature = "";
     let memoTimer = null;
+    let memoBase = "";
+
+    function draftKey(kind) { return `lass-draft:${state.draft_key}:${kind}`; }
+    function draft(kind, base) {
+      try {
+        const value = JSON.parse(localStorage.getItem(draftKey(kind)) || "null");
+        return value?.base === base ? value : null;
+      } catch (_) { return null; }
+    }
+    function keepDraft(kind, base, text) {
+      try { localStorage.setItem(draftKey(kind), JSON.stringify({base, text})); } catch (_) {}
+    }
+    function clearDraft(kind) {
+      try { localStorage.removeItem(draftKey(kind)); } catch (_) {}
+    }
 
     function post(action, payload = {}) {
       window.parent.postMessage({
@@ -103,9 +134,20 @@
       }, "*");
     }
 
+    function memoHeight() {
+      try {
+        const pane = window.parent.document.querySelector(".st-key-lass-memo-pane");
+        const frame = window.frameElement;
+        if (pane && frame) {
+          return Math.max(120, Math.floor(pane.getBoundingClientRect().bottom - frame.getBoundingClientRect().top));
+        }
+      } catch (_) { /* Keep the configured fallback when the parent DOM is unavailable. */ }
+      return Math.max(120, Number(state.height) || 180);
+    }
+
     function resize() {
       const height = state.mode === "memo"
-        ? Math.max(120, Number(state.height) || 180)
+        ? memoHeight()
         : Math.max(120, Math.ceil(app.scrollHeight + 4));
       window.parent.postMessage({
         isStreamlitMessage: true,
@@ -114,30 +156,69 @@
       }, "*");
     }
 
-    function appendInline(element, source) {
-      const pattern = /(`[^`]+`|\*\*[^*]+\*\*|~~[^~]+~~|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+    function appendInline(element, source, allowFontSize = false) {
+      const decodeText = (value) => {
+        const textarea = document.createElement("textarea");
+        textarea.innerHTML = value;
+        return textarea.value;
+      };
+      if (allowFontSize && /<\/?(?:font|u|strong|em)\b/i.test(source)) {
+        const tags = /<font size="([1-7])">|<\/(font|u|strong|em)>|<(u|strong|em)>/gi;
+        let cursor = 0;
+        let current = element;
+        const stack = [];
+        for (const match of source.matchAll(tags)) {
+          if (match.index > cursor) appendInline(current, source.slice(cursor, match.index));
+          if (match[1] || match[3]) {
+            const child = document.createElement(match[1] ? "font" : match[3].toLowerCase());
+            if (match[1]) child.setAttribute("size", match[1]);
+            current.append(child);
+            stack.push(current);
+            current = child;
+          } else if (stack.length) {
+            current = stack.pop();
+          }
+          cursor = match.index + match[0].length;
+        }
+        if (cursor < source.length) appendInline(current, source.slice(cursor));
+        return;
+      }
+      const pattern = /(`[^`]+`|\*{4}[^*]+\*{4}|\*\*\*[^*]+\*\*\*|\*\*[^*]+(?:\*[^*]+\*[^*]*)*\*\*|~~[^~]+~~|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
       let cursor = 0;
       for (const match of source.matchAll(pattern)) {
-        if (match.index > cursor) element.append(document.createTextNode(source.slice(cursor, match.index)));
+        if (match.index > cursor) element.append(document.createTextNode(decodeText(source.slice(cursor, match.index))));
         const token = match[0];
         let child;
         if (token.startsWith("`")) child = document.createElement("code");
-        else if (token.startsWith("**")) child = document.createElement("strong");
-        else if (token.startsWith("~~")) child = document.createElement("s");
+        else if (token.startsWith("****")) {
+          child = document.createElement("strong");
+          appendInline(child, token.slice(4, -4), allowFontSize);
+          element.append(child); cursor = match.index + token.length; continue;
+        } else if (token.startsWith("***")) {
+          child = document.createElement("strong");
+          const emphasis = document.createElement("em");
+          appendInline(emphasis, token.slice(3, -3), allowFontSize);
+          child.append(emphasis);
+          element.append(child); cursor = match.index + token.length; continue;
+        } else if (token.startsWith("**")) {
+          child = document.createElement("strong");
+          appendInline(child, token.slice(2, -2), allowFontSize);
+          element.append(child); cursor = match.index + token.length; continue;
+        } else if (token.startsWith("~~")) child = document.createElement("s");
         else if (token.startsWith("[")) {
           const parts = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
           child = document.createElement("a"); child.textContent = parts[1]; child.href = parts[2];
           child.target = "_blank"; child.rel = "noopener noreferrer";
           element.append(child); cursor = match.index + token.length; continue;
         } else child = document.createElement("em");
-        child.textContent = token.startsWith("**") || token.startsWith("~~") ? token.slice(2, -2) : token.slice(1, -1);
+        child.textContent = decodeText(token.startsWith("**") || token.startsWith("~~") ? token.slice(2, -2) : token.slice(1, -1));
         element.append(child);
         cursor = match.index + token.length;
       }
-      if (cursor < source.length) element.append(document.createTextNode(source.slice(cursor)));
+      if (cursor < source.length) element.append(document.createTextNode(decodeText(source.slice(cursor))));
     }
 
-    function markdownView(text) {
+    function markdownView(text, allowFontSize = false) {
       const view = document.createElement("div");
       view.className = "summary-view";
       const lines = text.replace(/\r\n?/g, "\n").split("\n");
@@ -154,11 +235,11 @@
         if (line.includes("|") && index + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[index + 1])) {
           list = null; const table = document.createElement("table");
           const split = (value) => value.replace(/^\s*\||\|\s*$/g, "").split("|").map((cell) => cell.trim());
-          const header = document.createElement("tr"); split(line).forEach((cell) => { const th=document.createElement("th"); appendInline(th, cell); header.append(th); });
+          const header = document.createElement("tr"); split(line).forEach((cell) => { const th=document.createElement("th"); appendInline(th, cell, allowFontSize); header.append(th); });
           const head = document.createElement("thead"); head.append(header); table.append(head); index += 2;
           const body = document.createElement("tbody");
           while (index < lines.length && lines[index].includes("|") && lines[index].trim()) {
-            const row=document.createElement("tr"); split(lines[index]).forEach((cell) => { const td=document.createElement("td"); appendInline(td, cell); row.append(td); }); body.append(row); index += 1;
+            const row=document.createElement("tr"); split(lines[index]).forEach((cell) => { const td=document.createElement("td"); appendInline(td, cell, allowFontSize); row.append(td); }); body.append(row); index += 1;
           }
           table.append(body); view.append(table); continue;
         }
@@ -166,22 +247,22 @@
         if (heading) {
           list = null;
           const node = document.createElement(`h${heading[1].length}`);
-          appendInline(node, heading[2]);
+          appendInline(node, heading[2], allowFontSize);
           view.append(node);
         } else if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
           const ordered = /^\s*\d+\./.test(line);
           if (!list || (list.tagName === "OL") !== ordered) { list = document.createElement(ordered ? "ol" : "ul"); view.append(list); }
           const node = document.createElement("li");
-          appendInline(node, line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, ""));
+          appendInline(node, line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, ""), allowFontSize);
           list.append(node);
         } else if (/^\s*>\s?/.test(line)) {
-          list = null; const quote=document.createElement("blockquote"); const node=document.createElement("p"); appendInline(node, line.replace(/^\s*>\s?/, "")); quote.append(node); view.append(quote);
+          list = null; const quote=document.createElement("blockquote"); const node=document.createElement("p"); appendInline(node, line.replace(/^\s*>\s?/, ""), allowFontSize); quote.append(node); view.append(quote);
         } else if (/^\s*(?:---+|\*\*\*+)\s*$/.test(line)) {
           list = null; view.append(document.createElement("hr"));
         } else if (line.trim()) {
           list = null;
           const node = document.createElement("p");
-          appendInline(node, line);
+          appendInline(node, line, allowFontSize);
           view.append(node);
         } else {
           list = null;
@@ -189,6 +270,87 @@
         index += 1;
       }
       return view;
+    }
+
+    function memoEditorContent(text) {
+      const view = markdownView(text, true);
+      view.querySelectorAll("li").forEach((item) => {
+        const match = item.textContent.match(/^\[([ xX])\]\s*(.*)$/);
+        if (!match) return;
+        item.dataset.checklist = match[1].toLowerCase() === "x" ? "checked" : "open";
+        const box = document.createElement("span");
+        box.className = "memo-check";
+        box.contentEditable = "false";
+        box.textContent = item.dataset.checklist === "checked" ? "☑" : "☐";
+        const content = document.createElement("span");
+        appendInline(content, match[2], true);
+        item.replaceChildren(box, content);
+      });
+      const fragment = document.createDocumentFragment();
+      while (view.firstChild) fragment.append(view.firstChild);
+      return fragment;
+    }
+
+    function inlineMemoMarkdown(node, activeMarks = new Set()) {
+      if (node.nodeType === Node.TEXT_NODE) return (node.nodeValue || "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      if (node.nodeType !== Node.ELEMENT_NODE) return "";
+      if (node.classList.contains("memo-check")) return "";
+      const bold = node.matches("strong,b") || /^(bold|[6-9]00)$/.test(node.style.fontWeight);
+      const italic = node.matches("em,i") || node.style.fontStyle === "italic";
+      const underline = node.matches("u") || node.style.textDecorationLine.includes("underline");
+      const marks = new Set(activeMarks);
+      if (bold) marks.add("bold");
+      if (italic) marks.add("italic");
+      if (underline) marks.add("underline");
+      const text = Array.from(node.childNodes).map((child) => inlineMemoMarkdown(child, marks)).join("");
+      if (node.matches("br")) return "\n";
+      if (node.matches("a")) return `[${text}](${node.href})`;
+      let formatted = text;
+      if (node.matches("code")) formatted = `\`${formatted}\``;
+      if (node.matches("s,del")) formatted = `~~${formatted}~~`;
+      if (italic && !activeMarks.has("italic")) formatted = `<em>${formatted}</em>`;
+      if (bold && !activeMarks.has("bold")) formatted = `<strong>${formatted}</strong>`;
+      if (underline && !activeMarks.has("underline")) formatted = `<u>${formatted}</u>`;
+      if (node.matches("font[size]")) {
+        const size = Number(node.getAttribute("size"));
+        if (size >= 1 && size <= 7) return `<font size="${size}">${formatted}</font>`;
+      }
+      return formatted;
+    }
+
+    function memoToMarkdown(root) {
+      const blocks = [];
+      const block = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) return (node.nodeValue || "").trim();
+        if (node.nodeType !== Node.ELEMENT_NODE) return "";
+        if (node.matches("ul,ol")) {
+          return Array.from(node.children).filter((item) => item.matches("li")).map((item, index) => {
+            const nested = Array.from(item.children).filter((child) => child.matches("ul,ol"));
+            const content = Array.from(item.childNodes)
+              .filter((child) => !nested.includes(child))
+              .map(inlineMemoMarkdown).join("").trim();
+            const prefix = item.dataset.checklist
+              ? `- [${item.dataset.checklist === "checked" ? "x" : " "}]`
+              : node.matches("ol") ? `${index + 1}.` : "-";
+            const children = nested.map(block).filter(Boolean).join("\n");
+            return `${prefix} ${content}${children ? `\n${children}` : ""}`;
+          }).join("\n");
+        }
+        if (node.matches("h1,h2,h3,h4,h5,h6")) {
+          return `${"#".repeat(Number(node.tagName.slice(1)))} ${inlineMemoMarkdown(node).trim()}`;
+        }
+        if (node.matches("blockquote")) {
+          return inlineMemoMarkdown(node).split("\n").map((line) => `> ${line}`).join("\n");
+        }
+        if (node.matches("p,div")) return inlineMemoMarkdown(node).trim();
+        return inlineMemoMarkdown(node).trim();
+      };
+      root.childNodes.forEach((node) => {
+        const value = block(node);
+        if (value) blocks.push(value);
+      });
+      return blocks.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     }
 
     function actionButton(label, callback, primary = false) {
@@ -201,17 +363,19 @@
     }
 
     function showSummaryEditor() {
+      if (state.streaming) return;
       editing = "summary";
       app.innerHTML = "";
       const editor = document.createElement("div");
       editor.className = "editor";
       const field = document.createElement("textarea");
-      field.value = state.text || "";
+      field.value = draft("summary", state.text)?.text ?? state.text ?? "";
+      field.addEventListener("input", () => keepDraft("summary", state.text, field.value));
       field.placeholder = "요약을 입력하세요.";
       const actions = document.createElement("div");
       actions.className = "actions";
       actions.append(
-        actionButton("취소", () => { editing = null; render(); }),
+        actionButton("취소", () => { clearDraft("summary"); editing = null; render(); }),
         actionButton("저장", () => {
           state.text = field.value;
           editing = null;
@@ -239,11 +403,11 @@
     function renderSummary() {
       const hint = document.createElement("div");
       hint.className = "edit-hint";
-      hint.textContent = "요약을 더블클릭하면 바로 수정할 수 있습니다.";
-      const view = state.text ? markdownView(state.text) : document.createElement("div");
+      hint.textContent = state.error || (state.streaming ? (state.text ? state.progress || "요약을 작성하고 있습니다…" : "") : "요약을 더블클릭하면 바로 수정할 수 있습니다.");
+      const view = state.text ? markdownView(state.text + (state.streaming ? " ▌" : "")) : document.createElement("div");
       if (!state.text) {
         view.className = "empty";
-        view.textContent = "아직 생성된 요약이 없습니다.\n더블클릭하여 직접 작성할 수 있습니다.";
+        view.textContent = state.streaming ? state.progress || "요약을 준비하고 있습니다…" : "아직 생성된 요약이 없습니다.\n더블클릭하여 직접 작성할 수 있습니다.";
       }
       view.addEventListener("dblclick", showSummaryEditor);
       app.append(hint, view);
@@ -271,6 +435,8 @@
       const rows = app.querySelectorAll(".row, .segment-editor");
       const target = rows[index];
       const segment = state.segments[index];
+      const segmentBase = JSON.stringify(segment);
+      const savedDraft = draft(`segment-${index}`, segmentBase);
       const editor = document.createElement("div");
       editor.className = "segment-editor";
       const times = document.createElement("div");
@@ -288,10 +454,17 @@
       times.append(startLabel, endLabel);
       const field = document.createElement("textarea");
       field.value = segment.text;
+      if (savedDraft) {
+        startInput.value = savedDraft.text.start;
+        endInput.value = savedDraft.text.end;
+        field.value = savedDraft.text.text;
+      }
+      for (const input of [startInput, endInput, field]) input.addEventListener("input", () =>
+        keepDraft(`segment-${index}`, segmentBase, {start:startInput.value, end:endInput.value, text:field.value}));
       const actions = document.createElement("div");
       actions.className = "actions";
       actions.append(
-        actionButton("취소", () => { editing = null; render(); }),
+        actionButton("취소", () => { clearDraft(`segment-${index}`); editing = null; render(); }),
         actionButton("저장", () => {
           const start = parseTime(startInput.value);
           const end = parseTime(endInput.value);
@@ -349,50 +522,53 @@
     function renderMemo() {
       const editor = document.createElement("div");
       editor.className = "memo-editor";
-      editor.style.setProperty("--memo-height", `${Math.max(120, Number(state.height) || 180)}px`);
       const toolbar = document.createElement("div");
       toolbar.className = "memo-toolbar";
-      const field = document.createElement("textarea");
+      const field = document.createElement("div");
       field.className = "memo-field";
-      field.value = state.text || "";
-      field.placeholder = "개인 메모를 입력하세요…";
+      field.contentEditable = "true";
+      field.setAttribute("role", "textbox");
+      field.setAttribute("aria-multiline", "true");
+      field.dataset.placeholder = "개인 메모를 입력하세요…";
+      field.append(memoEditorContent(state.text || ""));
       const status = document.createElement("span");
       status.className = "memo-status";
       status.textContent = "자동 저장됨";
 
-      const replaceSelection = (before, after, fallback) => {
-        const start = field.selectionStart;
-        const end = field.selectionEnd;
-        const selected = field.value.slice(start, end) || fallback;
-        field.setRangeText(`${before}${selected}${after}`, start, end, "end");
-        field.dispatchEvent(new Event("input"));
+      const changed = () => field.dispatchEvent(new Event("input", { bubbles: true }));
+      const command = (name) => {
         field.focus();
-      };
-      const prefixLines = (prefix) => {
-        const start = field.value.lastIndexOf("\n", Math.max(0, field.selectionStart - 1)) + 1;
-        const nextBreak = field.value.indexOf("\n", field.selectionEnd);
-        const end = nextBreak < 0 ? field.value.length : nextBreak;
-        const selected = field.value.slice(start, end) || "항목";
-        field.setRangeText(selected.split("\n").map((line) => `${prefix}${line}`).join("\n"), start, end, "end");
-        field.dispatchEvent(new Event("input"));
-        field.focus();
+        document.execCommand(name, false);
+        changed();
       };
       const tool = (label, title, callback) => {
         const button = actionButton(label, callback);
-        button.title = title;
         button.setAttribute("aria-label", title);
         button.addEventListener("pointerdown", (event) => event.preventDefault());
         toolbar.append(button);
       };
-      tool("B", "굵게", () => replaceSelection("**", "**", "굵은 글씨"));
-      tool("I", "기울임", () => replaceSelection("*", "*", "기울임 글씨"));
-      tool("•", "글머리 목록", () => prefixLines("- "));
-      tool("☑", "체크 목록", () => prefixLines("- [ ] "));
-      tool("↗", "링크", () => replaceSelection("[", "](https://)", "링크 이름"));
+      tool("B", "굵게", () => command("bold"));
+      tool("I", "기울이기", () => command("italic"));
+      tool("U", "밑줄", () => command("underline"));
+      const changeFontSize = (delta) => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !field.contains(selection.anchorNode) || !field.contains(selection.focusNode)) return;
+        const anchor = selection.anchorNode.nodeType === Node.ELEMENT_NODE
+          ? selection.anchorNode : selection.anchorNode.parentElement;
+        const current = Number(anchor.closest("font[size]")?.getAttribute("size")) || 3;
+        const size = Math.min(7, Math.max(1, current + delta));
+        field.focus();
+        document.execCommand("fontSize", false, String(size));
+        changed();
+      };
+      tool("A−", "선택 글자 작게", () => changeFontSize(-1));
+      tool("A+", "선택 글자 크게", () => changeFontSize(1));
+      tool("•", "글머리 목록", () => command("insertUnorderedList"));
       toolbar.append(status);
 
       field.addEventListener("input", () => {
-        state.text = field.value;
+        state.text = memoToMarkdown(field);
+        keepDraft("memo", memoBase, state.text);
         status.textContent = "저장 중…";
         status.classList.add("saving");
         window.clearTimeout(memoTimer);
@@ -402,6 +578,10 @@
           status.textContent = "자동 저장됨";
           status.classList.remove("saving");
         }, 600);
+      });
+      field.addEventListener("paste", (event) => {
+        event.preventDefault();
+        document.execCommand("insertText", false, event.clipboardData?.getData("text/plain") || "");
       });
       editor.append(toolbar, field);
       app.append(editor);
@@ -424,9 +604,23 @@
 
     window.addEventListener("message", (event) => {
       if (event.data.type !== "streamlit:render") return;
-      const next = event.data.args || state;
+      let next = event.data.args || state;
+      state.draft_key = next.draft_key;
+      if (next.mode === "memo") {
+        memoBase = next.text || "";
+        const saved = draft("memo", memoBase);
+        if (saved && saved.text !== next.text) {
+          next = {...next, text:saved.text};
+          post("save_memo", {text:saved.text});
+        } else {
+          try {
+            const value = JSON.parse(localStorage.getItem(draftKey("memo")) || "null");
+            if (value?.text === next.text) clearDraft("memo");
+          } catch (_) {}
+        }
+      }
       applyAppearance(next);
-      const nextSignature = JSON.stringify([next.mode, next.text, next.segments]);
+      const nextSignature = JSON.stringify([next.mode, next.text, next.segments, !!next.streaming, next.progress, next.error]);
       if (nextSignature === contentSignature) {
         state = next;
         document.body.classList.add("ready");
@@ -439,6 +633,10 @@
       render();
     });
     new ResizeObserver(resize).observe(app);
+    try {
+      const pane = window.parent.document.querySelector(".st-key-lass-memo-pane");
+      if (pane) new ResizeObserver(resize).observe(pane);
+    } catch (_) { /* Standalone component rendering still uses its configured height. */ }
     window.parent.postMessage({
       isStreamlitMessage: true,
       type: "streamlit:componentReady",

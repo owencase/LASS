@@ -25,6 +25,7 @@ def render_library_tree(
     key: str = "lass-library-tree",
     theme: str = "dark",
     text_scale: int = 100,
+    sessions: Optional[list[dict[str, Any]]] = None,
 ) -> Optional[dict[str, Any]]:
     folder_payload = [{"id": folder.id, "name": folder.name} for folder in folders]
     note_payload = [
@@ -40,6 +41,8 @@ def render_library_tree(
     return _library_tree(
         folders=folder_payload,
         notes=note_payload,
+        sessions=sessions or [],
+        mode="sessions" if sessions is not None else "notes",
         selected_id=selected_id,
         selected_folder_id=selected_folder_id,
         theme_mode=theme,

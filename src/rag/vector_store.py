@@ -239,6 +239,10 @@ class SQLiteVectorStore:
             return False
         with sqlite3.connect(str(path), timeout=10) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
+            if connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'collections'"
+            ).fetchone() is None:
+                return False
             cursor = connection.execute(
                 "DELETE FROM collections WHERE name = ?", (collection_name,)
             )

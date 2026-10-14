@@ -32,7 +32,6 @@ htmlcov/
 # Build / packaging output
 build/
 dist/
-LASS.app/
 LASS.exe
 develop-eggs/
 downloads/
@@ -57,10 +56,6 @@ __pypackages__/
 # Downloaded local AI models and checkpoints
 /models/*
 !/models/README.md
-!/models/exaone-4.0-1.2b/
-/models/exaone-4.0-1.2b/*
-!/models/exaone-4.0-1.2b/.gitkeep
-!/models/exaone-4.0-1.2b/lass-model-manifest.json
 /checkpoints/
 *.ckpt
 *.pt
@@ -79,11 +74,16 @@ tmp/
 temp/
 
 # OS / editors
-.DS_Store
 Thumbs.db
-.AppleDouble
-.LSOverride
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Local build tools and verification artifacts
+/tools/
+/validation/
+/output/
+/vendor/wheels/
+/verification*.json
+*.ort

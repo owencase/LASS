@@ -9,46 +9,11 @@ from urllib.request import Request, urlopen
 
 import streamlit as st
 
-from src.pdf_utils import DOCUMENT_EXTENSIONS, extract_document_text
+from src.pdf_utils import DOCUMENT_EXTENSIONS
+from src.source_jobs import process_source
 from src.stt.audio_utils import SUPPORTED_MEDIA_EXTENSIONS
 from src.rag import SQLiteTextStore, SQLiteVectorStore
 from src.ui.components import render_info, format_bytes
-
-
-def process_source(repository, source, settings, pipeline_factory, prompt_key, language,
-                   summarize, progress):
-    """Save transcription before attempting summary, so retries never lose work."""
-    note = repository.get(source["note_id"])
-    if source["status"] != "ready":
-        try:
-            progress("텍스트 추출 중…")
-            if source["media_type"] in DOCUMENT_EXTENSIONS:
-                document = extract_document_text(
-                    Path(source["path"]),
-                    progress=lambda _: progress("텍스트 추출 중…"),
-                )
-                values = {"transcript": document.text}
-            else:
-                result = pipeline_factory().transcribe(Path(source["path"]), language=language)
-                values = {"transcript": result.text, "segments": result.segments,
-                          "duration": result.duration, "language": result.language}
-            if note.vector_collection:
-                SQLiteVectorStore.delete_collection(settings.vector_database_path, note.vector_collection)
-                SQLiteTextStore.delete_collection(settings.vector_database_path, note.vector_collection)
-            note = repository.complete_source(source["id"], **values)
-            if note.folder_id:
-                SQLiteVectorStore.delete_collection(settings.vector_database_path, f"folder-{note.folder_id}")
-                SQLiteTextStore.delete_collection(settings.vector_database_path, f"folder-{note.folder_id}")
-        except Exception as exc:
-            repository.fail_source(source["id"], str(exc))
-            raise
-    if summarize:
-        progress(f"'{note.title}' 요약 중…")
-        result = pipeline_factory().resummarize(note.transcript, notes=note.notes,
-                                               prompt_key=prompt_key, collection_key=note.id,
-                                               progress=lambda _: progress(f"'{note.title}' 요약 중…"))
-        repository.replace_summary(note.id, summary=result.summary, prompt_key=prompt_key,
-                                   prompt_name=result.prompt_name, vector_collection=result.vector_collection)
 
 
 def render_source_panel(repository, note, settings, pipeline_factory, model_ready, prompt_manager,
@@ -76,7 +41,6 @@ def render_source_panel(repository, note, settings, pipeline_factory, model_read
         if mode == "파일 선택":
             upload = st.file_uploader("녹음, 영상, PDF, PowerPoint", type=sorted(
                 extension.lstrip(".") for extension in {*SUPPORTED_MEDIA_EXTENSIONS, *DOCUMENT_EXTENSIONS}),
-                help="최대 200MB. 큰 파일은 로컬 파일 경로로 추가하면 업로드 메모리를 사용하지 않습니다.",
                 key=f"source-file-{note.id}-{version}")
         elif mode == "바로 녹음":
             upload = st.audio_input("마이크로 녹음",
@@ -130,20 +94,15 @@ def render_source_panel(repository, note, settings, pipeline_factory, model_read
             key=f"source-selected-{note.id}")
         source = next(item for item in sources if item["id"] == selected_id)
         st.caption(f"{format_bytes(source['file_size'])} · " +
-                   {"attached": "처리 대기", "ready": "텍스트 저장 완료", "failed": "처리 실패"}.get(source["status"], source["status"]))
-        if source["error_message"]:
-            st.error(source["error_message"])
-        templates = prompt_manager.list_templates()
-        controls = st.columns(3)
+                   {"attached": "처리 대기", "processing": "처리 중단 · 다시 시작 가능",
+                    "ready": "텍스트 저장 완료", "failed": "처리 실패"}.get(source["status"], source["status"]))
+        prompt_key = "lecture_detail"
+        controls = st.columns(2)
         with controls[0]:
-            prompt_key = st.selectbox("요약 형식", [item.key for item in templates],
-                format_func=lambda value: next(item.name for item in templates if item.key == value),
-                key=f"source-template-{note.id}")
-        with controls[1]:
             language = st.selectbox("음성 언어", [None, "ko", "en"],
                 format_func=lambda value: {None: "자동 감지", "ko": "한국어", "en": "영어"}[value],
                 key=f"source-language-{note.id}")
-        with controls[2]:
+        with controls[1]:
             summarize = st.checkbox("추출 후 전체 노트 요약", value=model_ready, disabled=not model_ready,
                                       key=f"source-summary-{note.id}") and model_ready
         if not model_ready:
@@ -152,13 +111,21 @@ def render_source_panel(repository, note, settings, pipeline_factory, model_read
                      type="primary", key=f"source-process-{note.id}",
                      disabled=source["status"] == "ready" and not summarize):
             status = st.empty()
+            stream_view = st.empty()
+            parts = []
+            def show_token(token):
+                parts.append(token)
+                stream_view.markdown("".join(parts) + " ▌")
+            def show_segment(segment):
+                stream_view.markdown(segment.text)
             status.info("텍스트 추출 중…")
             try:
                 process_source(repository, source, settings, pipeline_factory, prompt_key,
-                               language, summarize, status.info)
+                               language, summarize, status.info,
+                               on_token=show_token, on_segment=show_segment)
             except Exception as exc:
-                status.error("처리를 완료하지 못했습니다. 저장된 자료와 전사는 유지됩니다.")
-                st.error(str(exc))
+                st.session_state["flash_error"] = f"자료 처리에 실패했습니다: {exc}"
+                st.rerun()
             else:
                 status.success("자료 처리가 완료되었습니다.")
                 st.session_state["flash_message"] = "자료 처리 결과를 노트에 저장했습니다."

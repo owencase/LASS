@@ -50,17 +50,12 @@ class Settings:
     project_root: Path = PROJECT_ROOT
     data_dir: Path = PROJECT_ROOT / "data"
     prompt_dir: Path = PROJECT_ROOT / "prompts"
-    whisper_model: str = "large-v3"
-    whisper_device: str = "auto"
-    whisper_compute_type: str = "int8"
+    stt_model_dir: Path = PROJECT_ROOT / "models" / "moonshine"
+    stt_language: str = "ko"
     stt_target_lufs: float = -16.0
-    embedding_model: str = "intfloat/multilingual-e5-small"
-    exaone_model_id: str = "LGAI-EXAONE/EXAONE-4.0-1.2B"
-    exaone_model_dir: Path = PROJECT_ROOT / "models" / "exaone-4.0-1.2b"
-    exaone_mlx_model_id: str = "mlx-community/exaone-4.0-1.2b-4bit"
-    exaone_mlx_model_dir: Path = PROJECT_ROOT / "models" / "exaone-4.0-1.2b-mlx-4bit"
+    exaone_model_id: str = "mradermacher/EXAONE-4.0-1.2B-i1-GGUF"
+    exaone_model_dir: Path = PROJECT_ROOT / "models" / "exaone-4.0-1.2b-iq4-xs"
     exaone_device: str = "auto"
-    exaone_max_new_tokens: int = 384
     exaone_max_input_tokens: int = 2048
     exaone_temperature: float = 0.1
     chunk_size: int = 1200
@@ -75,17 +70,13 @@ class Settings:
         return self.data_dir / "vectors.db"
 
     @property
-    def model_registry_path(self) -> Path:
-        return self.data_dir / "model_registry.json"
-
-    @property
     def document_dir(self) -> Path:
         return self.data_dir / "documents"
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.exaone_model_dir.mkdir(parents=True, exist_ok=True)
-        self.exaone_mlx_model_dir.mkdir(parents=True, exist_ok=True)
+        self.stt_model_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_env(cls, env_file: Path | None = None) -> "Settings":
@@ -108,37 +99,19 @@ class Settings:
         data_dir = get_path("LASS_DATA_DIR", project_root / "data")
         prompt_dir = get_path("LASS_PROMPT_DIR", project_root / "prompts")
         exaone_model_dir = get_path(
-            "LASS_EXAONE_MODEL_DIR", project_root / "models" / "exaone-4.0-1.2b"
+            "LASS_EXAONE_MODEL_DIR", project_root / "models" / "exaone-4.0-1.2b-iq4-xs"
         )
-        exaone_mlx_model_dir = get_path(
-            "LASS_EXAONE_MLX_MODEL_DIR",
-            project_root / "models" / "exaone-4.0-1.2b-mlx-4bit",
-        )
-
         settings = cls(
             project_root=project_root,
             data_dir=data_dir,
             prompt_dir=prompt_dir,
-            whisper_model=get("LASS_WHISPER_MODEL", "large-v3"),
-            whisper_device=get("LASS_WHISPER_DEVICE", "auto"),
-            whisper_compute_type=get("LASS_WHISPER_COMPUTE_TYPE", "int8"),
+            stt_model_dir=get_path("LASS_STT_MODEL_DIR", project_root / "models" / "moonshine"),
+            stt_language=get("LASS_STT_LANGUAGE", "ko"),
             stt_target_lufs=_as_float(
                 get("LASS_STT_TARGET_LUFS", "-16"), "LASS_STT_TARGET_LUFS"
             ),
-            embedding_model=get("LASS_EMBEDDING_MODEL", "intfloat/multilingual-e5-small"),
-            exaone_model_id=get(
-                "LASS_EXAONE_MODEL_ID", "LGAI-EXAONE/EXAONE-4.0-1.2B"
-            ),
             exaone_model_dir=exaone_model_dir,
-            exaone_mlx_model_id=get(
-                "LASS_EXAONE_MLX_MODEL_ID", "mlx-community/exaone-4.0-1.2b-4bit"
-            ),
-            exaone_mlx_model_dir=exaone_mlx_model_dir,
             exaone_device=get("LASS_EXAONE_DEVICE", "auto"),
-            exaone_max_new_tokens=_as_int(
-                get("LASS_EXAONE_MAX_NEW_TOKENS", "384"),
-                "LASS_EXAONE_MAX_NEW_TOKENS",
-            ),
             exaone_temperature=_as_float(
                 get("LASS_EXAONE_TEMPERATURE", "0.1"),
                 "LASS_EXAONE_TEMPERATURE",
@@ -149,12 +122,12 @@ class Settings:
             chunk_size=_as_int(get("LASS_CHUNK_SIZE", "1200"), "LASS_CHUNK_SIZE"),
             chunk_overlap=_as_int(get("LASS_CHUNK_OVERLAP", "150"), "LASS_CHUNK_OVERLAP"),
         )
+        if settings.stt_language not in {"ko", "en"}:
+            raise ValueError("LASS_STT_LANGUAGE must be ko or en")
         if settings.chunk_size <= 0:
             raise ValueError("LASS_CHUNK_SIZE must be greater than zero")
         if settings.chunk_overlap < 0 or settings.chunk_overlap >= settings.chunk_size:
             raise ValueError("LASS_CHUNK_OVERLAP must be between 0 and chunk size - 1")
-        if settings.exaone_max_new_tokens <= 0:
-            raise ValueError("LASS_EXAONE_MAX_NEW_TOKENS must be greater than zero")
         if not 512 <= settings.exaone_max_input_tokens <= 32768:
             raise ValueError("LASS_EXAONE_MAX_INPUT_TOKENS must be between 512 and 32768")
         if not -30.0 <= settings.stt_target_lufs <= -5.0:

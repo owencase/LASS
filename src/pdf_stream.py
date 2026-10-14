@@ -36,7 +36,7 @@ def parse_byte_range(value: str, file_size: int) -> Optional[Tuple[int, int]]:
 class LocalMediaServer:
     """Stream registered local media via byte ranges without buffering whole files."""
 
-    extensions = {".pdf", ".aac", ".flac", ".m4a", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"}
+    extensions = {".pdf", ".jpg", ".png", ".svg", ".aac", ".flac", ".m4a", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".wav", ".webm"}
 
     def __init__(self) -> None:
         self._secret = secrets.token_bytes(32)
@@ -83,7 +83,7 @@ class LocalMediaServer:
                 self.send_header("Content-Type", mimetypes.guess_type(source.name)[0] or "application/octet-stream")
                 self.send_header("Accept-Ranges", "bytes")
                 self.send_header("Content-Length", str(max(0, end - start + 1)))
-                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("Cache-Control", "private, max-age=3600" if source.suffix.lower() in {".jpg", ".png", ".svg"} else "private, no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
                 if selected is not None:
                     self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")

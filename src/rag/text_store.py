@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import math
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,6 +64,10 @@ class SQLiteTextStore:
                 )
                 """
             )
+            connection.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS text_similarity USING fts5(
+                collection_name UNINDEXED, chunk_id UNINDEXED, features,
+                document UNINDEXED, metadata_json UNINDEXED
+            )""")
 
     def upsert_stream(
         self,
@@ -88,6 +94,7 @@ class SQLiteTextStore:
                 "DELETE FROM text_chunks WHERE collection_name = ?",
                 (self.collection_name,),
             )
+            connection.execute("DELETE FROM text_similarity WHERE collection_name = ?", (self.collection_name,))
             rows = []
             for chunk in chunks:
                 rows.append(
@@ -96,20 +103,56 @@ class SQLiteTextStore:
                         f"chunk-{chunk.index}",
                         chunk.text,
                         json.dumps(
-                            {"index": chunk.index, "start": chunk.start, "end": chunk.end},
+                            {**chunk.metadata, "index": chunk.index, "start": chunk.start, "end": chunk.end},
                             ensure_ascii=False,
                         ),
                     )
                 )
                 if len(rows) >= batch_size:
-                    connection.executemany(
-                        "INSERT INTO text_chunks VALUES (?, ?, ?, ?)", rows
-                    )
+                    self._insert_rows(connection, rows)
                     rows.clear()
             if rows:
-                connection.executemany(
-                    "INSERT INTO text_chunks VALUES (?, ?, ?, ?)", rows
-                )
+                self._insert_rows(connection, rows)
+
+    @staticmethod
+    def _features(text: str) -> Counter:
+        # Sparse word/character vectors support Korean particles without model loading.
+        features = []
+        for word in _TERM.findall(text.casefold()):
+            features.append(word)
+            if any("가" <= char <= "힣" for char in word):
+                features.extend(word[index:index + 2] for index in range(len(word) - 1))
+        return Counter(features)
+
+    @classmethod
+    def _insert_rows(cls, connection, rows):
+        connection.executemany("INSERT INTO text_chunks VALUES (?, ?, ?, ?)", rows)
+        connection.executemany("INSERT INTO text_similarity VALUES (?, ?, ?, ?, ?)",
+            ((collection, chunk_id, " ".join(cls._features(document).elements()), document, metadata)
+             for collection, chunk_id, document, metadata in rows))
+
+    def search_similar(self, query: str, limit: int = 6) -> List[TextSearchResult]:
+        """FTS candidate selection followed by sparse cosine similarity ranking."""
+        if limit <= 0:
+            raise ValueError("limit must be greater than zero")
+        features = self._features(query)
+        if not features:
+            return []
+        match = " OR ".join('"' + term + '"' for term in list(features)[:64])
+        with self._connect() as connection:
+            rows = connection.execute("""SELECT document, metadata_json FROM text_similarity
+                WHERE text_similarity MATCH ? AND collection_name = ?
+                ORDER BY bm25(text_similarity) LIMIT ?""",
+                (match, self.collection_name, max(64, limit))).fetchall()
+        query_norm = math.sqrt(sum(value * value for value in features.values()))
+        results = []
+        for row in rows:
+            document_features = self._features(row["document"])
+            norm = math.sqrt(sum(value * value for value in document_features.values()))
+            score = sum(value * document_features[term] for term, value in features.items()) / (query_norm * norm) if norm else 0
+            if score > 0:
+                results.append(TextSearchResult(row["document"], score, json.loads(row["metadata_json"])))
+        return sorted(results, key=lambda result: result.score, reverse=True)[:limit]
 
     def get_fingerprint(self) -> str:
         with self._connect() as connection:
@@ -134,7 +177,7 @@ class SQLiteTextStore:
         terms = list(dict.fromkeys(_TERM.findall(query.casefold())))[:24]
         return " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
 
-    def search(self, query: str, limit: int = 6) -> List[TextSearchResult]:
+    def search(self, query: str, limit: int = 6, *, fallback: bool = True) -> List[TextSearchResult]:
         if limit <= 0:
             raise ValueError("limit must be greater than zero")
         match_query = self._match_query(query)
@@ -151,7 +194,7 @@ class SQLiteTextStore:
                     """,
                     (match_query, self.collection_name, limit),
                 ).fetchall()
-            if not rows:
+            if not rows and fallback:
                 rows = connection.execute(
                     """
                     SELECT document, metadata_json, 0.0 AS score
@@ -185,6 +228,8 @@ class SQLiteTextStore:
             connection.execute(
                 "DELETE FROM text_chunks WHERE collection_name = ?", (collection_name,)
             )
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE name = 'text_similarity'").fetchone():
+                connection.execute("DELETE FROM text_similarity WHERE collection_name = ?", (collection_name,))
             cursor = connection.execute(
                 "DELETE FROM text_collections WHERE name = ?", (collection_name,)
             )

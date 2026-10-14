@@ -1,15 +1,9 @@
 # Local model assets
 
-LASS keeps the EXAONE runtime snapshot under `models/exaone-4.0-1.2b/` so that
-inference never needs a remote API or a shared global model cache.
+Model weights are downloaded on first launch and are not stored in Git.
 
-```bash
-python scripts/manage_models.py download
-python scripts/manage_models.py status
-python scripts/manage_models.py verify
-```
+- LLM: EXAONE 4.0 1.2B IQ4_XS GGUF (`models/exaone-4.0-1.2b-iq4-xs`).
+- STT: Moonshine Voice Korean Tiny and English Medium Streaming (`models/moonshine`).
 
-The downloaded weights are about 2.56 GB. Large model binaries are intentionally
-excluded from Git; the generated `lass-model-manifest.json` records their exact
-size and SHA-256 checksum. Review LG AI Research's EXAONE license in the downloaded
-snapshot before redistribution.
+Pinned STT file URLs, sizes and SHA-256 values are in `src/stt/moonshine-models.json`.
+Korean Tiny uses the Moonshine Community License. See `src/assets/MOONSHINE-LICENSE.txt`.

@@ -9,6 +9,13 @@ from src.pdf_utils import extract_pdf_page
 
 
 class PDFUtilsTests(unittest.TestCase):
+    def test_embedded_text_pages_do_not_force_ocr_for_decorative_images(self) -> None:
+        source = (Path(__file__).parents[1] / 'src/pdf_utils.py').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn('needs_ocr = _visible_characters(native) < 40', source)
+        self.assertNotIn('has_images and _visible_characters(native)', source)
+
     def test_extracts_only_the_requested_page_for_slide_navigation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             source = Path(temporary_directory) / "slides.pdf"

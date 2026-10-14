@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterator, List
 
 
@@ -12,6 +12,7 @@ class TextChunk:
     text: str
     start: int
     end: int
+    metadata: dict = field(default_factory=dict)
 
 
 def _natural_break(text: str, start: int, limit: int, minimum: int) -> int:

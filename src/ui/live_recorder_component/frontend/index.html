@@ -6,40 +6,46 @@
   <style>
     :root{color-scheme:dark;--text:#f5f7fa;--muted:#a7b0bf;--field:#0f1217;--line:rgba(226,232,240,.22);--accent:#76a9ff;--ink:#07111f;--danger:#ff8a98}
     :root[data-theme="light"]{color-scheme:light;--text:#1e293b;--muted:#64748b;--field:#fff;--line:#e2e8f0;--accent:#2563eb;--ink:#fff;--danger:#dc2626}
-    *{box-sizing:border-box}html,body{height:152px;margin:0;overflow:hidden;background:transparent;font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    .recorder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:152px;color:var(--text)}
-    button{position:relative;display:grid;place-items:center;width:64px;height:64px;padding:0;border:4px solid #f1f5f9;border-radius:50%;color:var(--danger);background:var(--field);box-shadow:0 1px 3px rgba(15,23,42,.1);cursor:pointer;transition:transform .15s ease}
+    *{box-sizing:border-box}html,body{height:118px;margin:0;overflow:hidden;background:transparent;font-family:Inter,Pretendard,"Segoe UI",sans-serif}
+    .recorder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:118px;color:var(--text)}
+    button{position:relative;display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid var(--line);border-radius:50%;color:var(--danger);background:var(--field);box-shadow:0 1px 3px rgba(15,23,42,.1);cursor:pointer;transition:transform .15s ease}
     button:hover{transform:scale(1.03)}button:active{transform:scale(.95)}button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-    i{display:block;width:24px;height:24px;border-radius:50%;background:currentColor;transition:.2s ease}.recording i{border-radius:6px;transform:scale(.75)}
-    .status{margin-top:10px;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.recording+.status{color:var(--danger)}
-    .meta{display:flex;justify-content:space-between;width:100%;margin-top:16px;color:var(--muted);font-size:9px;font-weight:600}.meta span{display:flex;align-items:center;gap:5px}.meta b{font:inherit;font-variant-numeric:tabular-nums}
+    i{display:block;width:16px;height:16px;border-radius:50%;background:currentColor;transition:.2s ease}
+    .controls{display:flex;gap:16px;align-items:center}.controls button{font-size:19px}.controls button:not(#record){color:var(--text)}button:disabled{opacity:.35;cursor:default}
+    .status{margin-top:6px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.recording+.status{color:var(--danger)}
+    .meta{display:flex;justify-content:center;margin-top:7px;color:var(--muted);font-size:9px;font-weight:600}.meta span{display:flex;align-items:center;gap:5px}.meta b{font:inherit;font-variant-numeric:tabular-nums}
   </style>
 </head>
-<body><div class="recorder"><button id="record" type="button" aria-label="녹음 시작"><i></i></button><span id="status" class="status">Ready to Record</span><div class="meta"><span>⌁ Waveform active</span><span>◷ <b id="elapsed">00:00:00</b></span></div></div>
+<body><div class="recorder"><div class="controls"><button id="record" type="button" aria-label="녹음 시작"><i></i></button><button id="pause" type="button" aria-label="일시정지" disabled>Ⅱ</button><button id="stop" type="button" aria-label="정지" disabled>■</button></div><span id="status" class="status">녹음 준비</span><div class="meta"><span>◷ <b id="elapsed">00:00:00</b></span></div></div>
 <script>
   const button = document.getElementById("record");
   const status = document.getElementById("status");
   const elapsed = document.getElementById("elapsed");
+  const pauseButton = document.getElementById("pause"), stopButton = document.getElementById("stop");
   let stream = null;
   let recorder = null;
   let timer = null;
   let elapsedTimer = null;
   let startedAt = 0;
   let recording = false;
+  let paused = false, finishing = false, targetNote = "", pausedAt = 0, pausedTotal = 0, segmentStarted = 0, segmentRemaining = 8000;
   let queue = [];
   let awaiting = "";
   let args = {ack_nonce:"",theme_mode:"dark"};
 
-  function resize(){window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:152},"*")}
+  function resize(){window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:118},"*")}
   function value(payload){window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setComponentValue",value:payload},"*")}
   function update(){
     button.classList.toggle("recording",recording);
-    button.setAttribute("aria-label",recording?"녹음 중지":"녹음 시작");
-    status.textContent=recording?"Recording...":"Ready to Record";
+    button.disabled=recording||finishing||queue.length>0||!args.note_id;
+    pauseButton.disabled=stopButton.disabled=!recording;
+    pauseButton.setAttribute("aria-label",paused?"녹음 재개":"일시정지");
+    pauseButton.textContent=paused?"▶":"Ⅱ";
+    status.textContent=recording?(paused?"일시정지됨":"녹음 중 · 패널을 닫아도 계속됩니다"):"녹음 준비";
     button.setAttribute("aria-pressed",recording?"true":"false");
   }
   function updateElapsed(){
-    const total=Math.max(0,Math.floor((Date.now()-startedAt)/1000));
+    const total=Math.max(0,Math.floor(((paused?pausedAt:Date.now())-startedAt-pausedTotal)/1000));
     const hours=String(Math.floor(total/3600)).padStart(2,"0");
     const minutes=String(Math.floor(total%3600/60)).padStart(2,"0");
     const seconds=String(total%60).padStart(2,"0");
@@ -53,43 +59,57 @@
   function pump(){
     if(awaiting||!queue.length)return;
     const item=queue[0];
+    const send=(payload)=>{const nonce=`${Date.now()}-${Math.random()}`;awaiting=nonce;value({...payload,nonce,note_id:item.note_id})};
+    if(item.payload){send(item.payload);return}
     const reader=new FileReader();
     reader.onloadend=()=>{
-      const nonce=`${Date.now()}-${Math.random()}`;
-      awaiting=nonce;
-      value({action:"audio_chunk",nonce,data:String(reader.result).split(",")[1]||"",mime:item.blob.type,extension:extension(item.blob.type),final:item.final});
+      send({action:"audio_chunk",data:String(reader.result).split(",")[1]||"",mime:item.blob.type,extension:extension(item.blob.type),final:item.final});
     };
     reader.readAsDataURL(item.blob);
   }
-  function enqueue(blob,final){if(blob.size){queue.push({blob,final});pump()}}
+  function state(active){queue.push({payload:{action:"state",active},note_id:targetNote});pump()}
+  function error(message){queue.push({payload:{action:"error",message},note_id:targetNote});pump()}
+  function enqueue(blob,final){if(blob.size){queue.push({blob,final,note_id:targetNote});pump()}}
   function cycle(){
     if(!recording||!stream)return;
     const chunks=[];
     const selected=mimeType();
     try{recorder=selected?new MediaRecorder(stream,{mimeType:selected,audioBitsPerSecond:32000}):new MediaRecorder(stream,{audioBitsPerSecond:32000})}
-    catch(error){recording=false;update();value({action:"error",nonce:`${Date.now()}`,message:String(error)});return}
+    catch(failure){recording=false;if(stream)stream.getTracks().forEach(track=>track.stop());stream=null;error(String(failure));state(false);update();return}
     recorder.ondataavailable=(event)=>{if(event.data.size)chunks.push(event.data)};
     recorder.onstop=()=>{
       const shouldContinue=recording;
       enqueue(new Blob(chunks,{type:recorder.mimeType||selected||"audio/webm"}),!shouldContinue);
-      if(shouldContinue)cycle();else if(stream){stream.getTracks().forEach((track)=>track.stop());stream=null}
+      if(shouldContinue)cycle();else {if(stream){stream.getTracks().forEach((track)=>track.stop());stream=null}finishing=false;state(false);update()}
     };
     recorder.start();
-    timer=window.setTimeout(()=>{if(recorder?.state==="recording")recorder.stop()},8000);
+    segmentRemaining=8000;segmentStarted=Date.now();
+    timer=window.setTimeout(()=>{if(recorder?.state==="recording")recorder.stop()},segmentRemaining);
   }
   async function start(){
-    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){value({action:"error",nonce:`${Date.now()}`,message:"이 환경에서는 마이크 녹음을 지원하지 않습니다."});return}
+    if(recording||finishing||queue.length||!args.note_id)return;
+    targetNote=args.note_id;
+    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){error("이 환경에서는 마이크 녹음을 지원하지 않습니다.");return}
     try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
-    catch(error){value({action:"error",nonce:`${Date.now()}`,message:"마이크 권한이 필요합니다."});return}
-    recording=true;startedAt=Date.now();updateElapsed();elapsedTimer=window.setInterval(updateElapsed,1000);update();cycle();
+    catch(failure){error("마이크 권한이 필요합니다.");return}
+    recording=true;paused=false;pausedTotal=0;startedAt=Date.now();state(true);updateElapsed();elapsedTimer=window.setInterval(updateElapsed,1000);update();cycle();
   }
-  function stop(){recording=false;window.clearTimeout(timer);window.clearInterval(elapsedTimer);update();if(recorder?.state==="recording")recorder.stop();else if(stream){stream.getTracks().forEach((track)=>track.stop());stream=null}}
-  button.addEventListener("click",()=>recording?stop():start());
+  function stop(){recording=false;finishing=true;window.clearTimeout(timer);window.clearInterval(elapsedTimer);update();if(recorder&&recorder.state!=="inactive")recorder.stop();else{if(stream)stream.getTracks().forEach((track)=>track.stop());stream=null;finishing=false;state(false);update()}}
+  function pause(){
+    if(!recording||!recorder||recorder.state==="inactive")return;
+    if(paused){pausedTotal+=Date.now()-pausedAt;paused=false;recorder.resume();segmentStarted=Date.now();timer=window.setTimeout(()=>{if(recorder?.state==="recording")recorder.stop()},segmentRemaining)}
+    else{paused=true;pausedAt=Date.now();segmentRemaining=Math.max(1,segmentRemaining-(pausedAt-segmentStarted));window.clearTimeout(timer);recorder.pause()}
+    update();updateElapsed();
+  }
+  button.addEventListener("click",start);
+  pauseButton.addEventListener("click",pause);
+  stopButton.addEventListener("click",stop);
   window.addEventListener("message",(event)=>{
     if(event.data?.type!=="streamlit:render")return;
     args=event.data.args||args;
     document.documentElement.dataset.theme=args.theme_mode==="light"?"light":"dark";
     if(awaiting&&args.ack_nonce===awaiting){queue.shift();awaiting="";pump()}
+    update();
     resize();
   });
   window.addEventListener("beforeunload",()=>{if(stream)stream.getTracks().forEach((track)=>track.stop())});

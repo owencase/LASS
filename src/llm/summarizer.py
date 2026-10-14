@@ -16,10 +16,10 @@ class Summarizer:
     def __init__(self, client: LocalEXAONEClient) -> None:
         self.client = client
 
-    def summarize(self, context: str, template: PromptTemplate) -> str:
+    def summarize(self, context: str, template: PromptTemplate, *, on_token: Callable[[str], None] | None = None) -> str:
         if not context.strip():
             raise ValueError("Summary context must not be empty")
-        return self.client.chat(template.system_prompt, template.render(context))
+        return self.client.chat(template.system_prompt, template.render(context), **({"on_token": on_token} if on_token else {}))
 
     def summarize_pages(
         self,
@@ -27,6 +27,7 @@ class Summarizer:
         template: PromptTemplate,
         *,
         progress: Callable[[str], None] | None = None,
+        on_token: Callable[[str], None] | None = None,
     ) -> str:
         """Summarize one context page at a time, then synthesize disk-spooled notes.
 
@@ -39,7 +40,7 @@ class Summarizer:
             objective=template.description,
             progress=progress,
         )
-        return self.summarize(condensed_context, template)
+        return self.summarize(condensed_context, template, on_token=on_token)
 
     def condense_pages(
         self,
@@ -78,7 +79,6 @@ class Summarizer:
                             "한국어 근거 메모로 남기세요. 다른 조각의 내용을 추측하지 마세요."
                         ),
                         f"최종 작업 목적: {objective}\n\n[현재 자료 조각]\n{page}",
-                        max_new_tokens=min(128, self.client.max_new_tokens),
                     )
                     self._write_note(notes_file, note)
 
@@ -102,7 +102,6 @@ class Summarizer:
                                 "중복만 제거하고 사실, 수치, 결론, 서로 다른 관점은 보존하세요."
                             ),
                             f"최종 작업 목적: {objective}\n\n" + "\n\n".join(group),
-                            max_new_tokens=min(160, self.client.max_new_tokens),
                         )
                         self._write_note(output, compact)
                 current_path = next_path

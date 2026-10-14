@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from contextlib import closing
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional, Sequence
@@ -27,10 +28,11 @@ class FolderRecord:
     updated_at: str
 
 
+
 @dataclass(frozen=True)
 class ChatMessageRecord:
     id: str
-    folder_id: str
+    folder_id: Optional[str]
     role: str
     content: str
     created_at: str
@@ -61,6 +63,7 @@ class LectureRecord:
     error_message: Optional[str]
     created_at: str
     updated_at: str
+    document_pages: Any = field(default=None, compare=False, repr=False)
 
 
 class LectureRepository(NoteSourcesMixin):
@@ -81,7 +84,7 @@ class LectureRepository(NoteSourcesMixin):
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("PRAGMA journal_mode = DELETE")
             connection.execute(
                 """
@@ -171,10 +174,45 @@ class LectureRepository(NoteSourcesMixin):
                 "CREATE INDEX IF NOT EXISTS idx_folder_chat_messages_folder "
                 "ON folder_chat_messages(folder_id, created_at)"
             )
+            connection.execute("""CREATE TABLE IF NOT EXISTS global_chat_messages (
+                id TEXT PRIMARY KEY,
+                role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+                content TEXT NOT NULL, created_at TEXT NOT NULL)""")
+            from .rollback_compat import restore_document_text
+            restore_document_text(connection)
+            connection.execute("""CREATE TABLE IF NOT EXISTS chat_sessions (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+            chat_columns = {row['name'] for row in connection.execute('PRAGMA table_info(global_chat_messages)')}
+            if 'session_id' not in chat_columns:
+                connection.execute("ALTER TABLE global_chat_messages ADD COLUMN session_id TEXT NOT NULL DEFAULT 'legacy'")
+            now = self._now()
+            if not connection.execute("SELECT 1 FROM app_metadata WHERE key = 'chat_sessions_migrated'").fetchone():
+                connection.execute("INSERT OR IGNORE INTO chat_sessions(id, title, created_at, updated_at) VALUES ('legacy', '기존 대화', ?, ?)", (now, now))
+                connection.execute("INSERT INTO app_metadata(key, value) VALUES ('chat_sessions_migrated', 'true')")
+            connection.execute('CREATE INDEX IF NOT EXISTS chat_session_messages ON global_chat_messages(session_id)')
+            connection.execute("""CREATE TABLE IF NOT EXISTS live_transcription_events (
+                note_id TEXT NOT NULL REFERENCES lectures(id) ON DELETE CASCADE,
+                nonce TEXT NOT NULL, PRIMARY KEY(note_id, nonce))""")
 
     @staticmethod
     def _now() -> str:
-        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+        return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+    def notes_revision(self, folder_id: Optional[str] = None) -> str:
+        """Content-free retrieval cache key; None includes unfiled notes too."""
+        import hashlib
+        with self._connect() as connection:
+            where = " WHERE folder_id = ?" if folder_id is not None else ""
+            rows = connection.execute("SELECT id, updated_at FROM lectures" + where + " ORDER BY id",
+                                      (folder_id,) if folder_id is not None else ())
+            digest = hashlib.sha256()
+            for row in rows:
+                digest.update(f"{row['id']}:{row['updated_at']}\n".encode())
+        return digest.hexdigest()
+
+    def folder_revision(self, folder_id: str) -> str:
+        return self.notes_revision(folder_id)
 
     @classmethod
     def _store_media_chunks(
@@ -207,8 +245,7 @@ class LectureRepository(NoteSourcesMixin):
             ),
         )
 
-    @staticmethod
-    def _to_record(row: sqlite3.Row) -> LectureRecord:
+    def _to_record(self, row: sqlite3.Row) -> LectureRecord:
         try:
             raw_segments = json.loads(row["segments_json"] or "[]")
         except (TypeError, json.JSONDecodeError):
@@ -246,6 +283,7 @@ class LectureRepository(NoteSourcesMixin):
             error_message=row["error_message"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            document_pages=(lambda: self.iter_document_pages(row["id"])) if row["has_document_pages"] else None,
         )
 
     def create(
@@ -421,6 +459,10 @@ class LectureRepository(NoteSourcesMixin):
             )
             if cursor.rowcount == 0:
                 raise KeyError(f"Unknown lecture: {lecture_id}")
+            connection.execute("DELETE FROM summary_source_links WHERE note_id = ?", (lecture_id,))
+            connection.execute("""INSERT INTO summary_source_links(note_id, source_id, page_number)
+                SELECT s.note_id, p.source_id, p.page_number FROM source_text_pages p
+                JOIN note_sources s ON s.id = p.source_id WHERE s.note_id = ?""", (lecture_id,))
         record = self.get(lecture_id)
         assert record is not None
         return record
@@ -496,7 +538,10 @@ class LectureRepository(NoteSourcesMixin):
         query = """
             SELECT id, title, source_name, source_path, folder_id, media_type, file_size,
                    status, prompt_key, prompt_name, language, duration, transcript,
-                   length(transcript) AS transcript_chars,
+                   length(transcript) + COALESCE((SELECT SUM(p.chars) FROM source_text_pages p
+                       JOIN note_sources s ON p.source_id = s.id WHERE s.note_id = lectures.id), 0) AS transcript_chars,
+                   EXISTS(SELECT 1 FROM source_text_pages p JOIN note_sources s
+                       ON p.source_id = s.id WHERE s.note_id = lectures.id) AS has_document_pages,
                    segments_json, json_array_length(segments_json) AS segment_count,
                    summary, notes, vector_collection, error_message,
                    created_at, updated_at,
@@ -603,10 +648,15 @@ class LectureRepository(NoteSourcesMixin):
 
     def iter_by_folder(self, folder_id: str):
         """Yield full folder records one by one from SQLite for retrieval jobs."""
+        yield from self.iter_notes(folder_id)
+
+    def iter_notes(self, folder_id: Optional[str] = None):
+        """Stream notes from the whole library or one folder without media blobs."""
         with self._connect() as connection:
+            where = " WHERE folder_id = ?" if folder_id is not None else ""
             rows = connection.execute(
-                f"{self._record_query()} WHERE folder_id = ? ORDER BY updated_at DESC",
-                (folder_id,),
+                self._record_query() + where + " ORDER BY updated_at DESC",
+                (folder_id,) if folder_id is not None else (),
             )
             for row in rows:
                 yield self._to_record(row)
@@ -621,7 +671,8 @@ class LectureRepository(NoteSourcesMixin):
                     WHERE folder_id = ? AND (
                         length(trim(transcript)) > 0 OR
                         length(trim(summary)) > 0 OR
-                        length(trim(notes)) > 0
+                        length(trim(notes)) > 0 OR EXISTS (SELECT 1 FROM source_text_pages p
+                            JOIN note_sources s ON p.source_id = s.id WHERE s.note_id = lectures.id)
                     )
                 ) AS has_content
                 """,
@@ -729,8 +780,45 @@ class LectureRepository(NoteSourcesMixin):
             connection.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
         return folder
 
+    def active_chat_session(self) -> str:
+        selected = self.get_metadata('active_chat_session')
+        sessions = self.list_chat_sessions()
+        if any(row['id'] == selected for row in sessions):
+            return selected
+        if not sessions:
+            return self.create_chat_session()
+        selected = sessions[0]['id']
+        self.set_metadata('active_chat_session', selected)
+        return selected
+
+    def rename_chat_session(self, session_id: str, title: str) -> None:
+        title = title.strip()
+        if not title or len(title) > 120:
+            raise ValueError('대화 이름은 1~120자로 입력해 주세요.')
+        with self._connect() as connection:
+            if not connection.execute('UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?',
+                                      (title, self._now(), session_id)).rowcount:
+                raise KeyError(session_id)
+
+    def delete_chat_session(self, session_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute('DELETE FROM global_chat_messages WHERE session_id = ?', (session_id,))
+            connection.execute('DELETE FROM chat_sessions WHERE id = ?', (session_id,))
+            connection.execute("DELETE FROM app_metadata WHERE key = 'active_chat_session' AND value = ?", (session_id,))
+
+    def list_chat_sessions(self) -> list[dict]:
+        with self._connect() as connection:
+            return [dict(row) for row in connection.execute('SELECT * FROM chat_sessions ORDER BY updated_at DESC, rowid DESC')]
+
+    def create_chat_session(self) -> str:
+        session_id, now = uuid4().hex, self._now()
+        with self._connect() as connection:
+            connection.execute("INSERT INTO chat_sessions(id, title, created_at, updated_at) VALUES (?, '새 대화', ?, ?)", (session_id, now, now))
+        self.set_metadata('active_chat_session', session_id)
+        return session_id
+
     def add_chat_message(
-        self, folder_id: str, role: str, content: str
+        self, folder_id: Optional[str], role: str, content: str, *, session_id: Optional[str] = None
     ) -> ChatMessageRecord:
         if role not in {"user", "assistant"}:
             raise ValueError("chat role must be user or assistant")
@@ -739,14 +827,26 @@ class LectureRepository(NoteSourcesMixin):
             raise ValueError("chat content cannot be empty")
         message_id = uuid4().hex
         created_at = self._now()
+        if folder_id is None:
+            session_id = session_id or self.active_chat_session()
         with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO folder_chat_messages(id, folder_id, role, content, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (message_id, folder_id, role, clean_content, created_at),
-            )
+            if folder_id is None:
+                if not connection.execute('SELECT 1 FROM chat_sessions WHERE id = ?', (session_id,)).fetchone():
+                    raise KeyError(session_id)
+                first = not connection.execute('SELECT 1 FROM global_chat_messages WHERE session_id = ?', (session_id,)).fetchone()
+                connection.execute("INSERT INTO global_chat_messages(id, role, content, created_at, session_id) VALUES (?, ?, ?, ?, ?)",
+                                   (message_id, role, clean_content, created_at, session_id))
+                connection.execute('UPDATE chat_sessions SET updated_at = ? WHERE id = ?', (created_at, session_id))
+                if first and role == 'user':
+                    connection.execute("UPDATE chat_sessions SET title = ? WHERE id = ? AND title IN ('새 대화', '기존 대화')", (clean_content[:48], session_id))
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO folder_chat_messages(id, folder_id, role, content, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (message_id, folder_id, role, clean_content, created_at),
+                )
         return ChatMessageRecord(
             id=message_id,
             folder_id=folder_id,
@@ -756,23 +856,27 @@ class LectureRepository(NoteSourcesMixin):
         )
 
     def list_chat_messages(
-        self, folder_id: str, limit: int = 100
+        self, folder_id: Optional[str], limit: Optional[int] = 100, *, session_id: Optional[str] = None
     ) -> List[ChatMessageRecord]:
-        if limit <= 0:
+        if limit is not None and limit <= 0:
             return []
+        table = "global_chat_messages" if folder_id is None else "folder_chat_messages"
+        folder_column = "NULL AS folder_id" if folder_id is None else "folder_id"
+        where = "WHERE session_id = ?" if folder_id is None else "WHERE folder_id = ?"
+        selected = (session_id or self.active_chat_session()) if folder_id is None else folder_id
         with self._connect() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT id, folder_id, role, content, created_at
                 FROM (
-                    SELECT rowid AS sequence, id, folder_id, role, content, created_at
-                    FROM folder_chat_messages
-                    WHERE folder_id = ?
+                    SELECT rowid AS sequence, id, {folder_column}, role, content, created_at
+                    FROM {table}
+                    {where}
                     ORDER BY rowid DESC LIMIT ?
                 )
                 ORDER BY sequence
                 """,
-                (folder_id, limit),
+                (selected, limit if limit is not None else -1),
             ).fetchall()
         return [
             ChatMessageRecord(
@@ -785,8 +889,10 @@ class LectureRepository(NoteSourcesMixin):
             for row in rows
         ]
 
-    def clear_chat_messages(self, folder_id: str) -> int:
+    def clear_chat_messages(self, folder_id: Optional[str]) -> int:
         with self._connect() as connection:
+            if folder_id is None:
+                return connection.execute("DELETE FROM global_chat_messages WHERE session_id = ?", (self.active_chat_session(),)).rowcount
             cursor = connection.execute(
                 "DELETE FROM folder_chat_messages WHERE folder_id = ?", (folder_id,)
             )

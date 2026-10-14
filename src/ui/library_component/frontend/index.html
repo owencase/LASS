@@ -24,33 +24,37 @@
       --muted:#64748b; --accent:#2563eb; --violet:#7c3aed; --danger:#dc2626;
     }
     * { box-sizing: border-box; }
-    html, body { width:100%; height:100%; min-height:0; margin:0; overflow:hidden; color:var(--text); background:transparent; font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:calc(16px * var(--scale)); }
+    html, body { width:100%; height:100%; min-height:0; margin:0; overflow:hidden; color:var(--text); background:transparent; font-family:Inter,Pretendard,"Segoe UI",sans-serif; font-size:calc(16px * var(--scale)); }
     #app { display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden; }
     .hint { display:none; }
     .tree { flex:1 1 0; min-height:0; overflow:auto; padding-right:3px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
-    .folder { margin-bottom: 4px; }
+    .folder { margin-bottom: 2px; }
     .folder-row, .note-row {
       width: 100%; display: flex; align-items: center; min-width: 0;
       border: 1px solid transparent; border-radius: 8px; cursor: default;
       user-select: none; transition: background .12s ease, border-color .12s ease;
     }
-    .folder-row { height: 36px; padding: 0 8px; color: var(--text); font-size: 13px; font-weight: 650; }
+    .folder-row { height: 32px; padding: 0 8px; color: var(--text); font-size: 12px; font-weight: 650; cursor:pointer; }
     .folder-row:hover, .note-row:hover { background: var(--hover); }
     .folder-row.selected-folder { color: var(--text); border-color: rgba(168,146,255,.28); background: rgba(168,146,255,.11); }
-    .chevron { width: 18px; color: var(--muted); font-size: 10px; transition: transform .15s ease; }
-    .folder.open .chevron { transform: rotate(90deg); }
-    .folder-icon { margin-right: 7px; color: var(--violet, #7d65db); font-size: 14px; }
+    .chevron { display:grid; place-items:center; width:18px; height:18px; flex:0 0 18px; color:var(--muted); }
+    .chevron svg { display:block; width:14px; height:14px; }
+    .chevron-open, .folder.open .chevron-closed { display:none; }
+    .folder.open .chevron-open { display:block; }
+    .folder-icon, .note-icon { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex:0 0 16px; }
+    .folder-icon { margin-right:7px; color:var(--violet); }
+    .folder-icon svg, .note-icon svg { display:block; width:16px; height:16px; }
     .folder-name, .note-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .count { margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 500; }
-    .folder-notes { display: none; padding-left: 18px; }
+    .folder-notes { display: none; padding-left: 16px; }
     .folder.open .folder-notes { display: block; }
-    .note-row { min-height: 52px; margin-bottom:4px; padding: 7px 9px; color: var(--text); border-color:color-mix(in srgb,var(--line) 62%,transparent); background:var(--panel); font-size: 12px; }
+    .note-row { min-height:40px; margin-bottom:2px; padding:4px 8px; color:var(--text); background:transparent; font-size:12px; }
     .note-row.selected { color: var(--text); border-color: color-mix(in srgb, var(--accent) 30%, transparent); background: var(--selected); }
-    .note-icon { width: 18px; flex: 0 0 18px; color: var(--muted); font-size: 12px; }
+    .note-icon { margin-right:7px; color:var(--muted); }
     .note-row.selected .note-icon { color: var(--accent); }
     .note-copy { min-width: 0; }
     .note-title { display: block; line-height: 1.25; }
-    .note-meta { display: block; overflow: hidden; margin-top: 2px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .note-meta { display: block; overflow: hidden; margin-top: 1px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
     .empty { padding: 28px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: center; white-space: pre-line; }
     .menu {
       position: fixed; z-index: 50; display: none; min-width: 170px; padding: 5px;
@@ -74,6 +78,8 @@
   <script>
     const app = document.getElementById("app");
     const menu = document.getElementById("menu");
+    const folderIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h4l2 2H16a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 16 16.5H4A1.5 1.5 0 0 1 2.5 15V6.5Z"/></svg>';
+    const noteIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="2"/><path d="M7 7h6M7 10h6M7 13h4"/></svg>';
     let state = { folders: [], notes: [], selected_id: null, selected_folder_id: null, theme_mode: "dark", text_scale: 100 };
     const expanded = new Set();
     let initialized = false;
@@ -107,6 +113,71 @@
       return element;
     }
 
+    function ask(message, value = "") {
+      return new Promise((resolve) => {
+        const doc = window.parent.document;
+        const dialog = doc.createElement("dialog");
+        dialog.className = "lass-library-dialog";
+        dialog.setAttribute("aria-labelledby", "lass-dialog-title");
+        const style = doc.createElement("style");
+        style.textContent = `
+          .lass-library-dialog { width:min(420px,85vw); padding:28px; border:1px solid var(--line,#d8dee8); border-radius:18px; color:var(--text,#1e293b); background:var(--panel,#fff); box-shadow:0 24px 90px #0004; }
+          .lass-library-dialog::backdrop { background:#0f172a66; backdrop-filter:blur(3px); }
+          .lass-library-dialog h2 { margin:0 0 20px; font:600 18px/1.6 sans-serif; white-space:pre-line; }
+          .lass-library-dialog input { box-sizing:border-box; width:100%; padding:12px; border:1px solid var(--line,#cbd5e1); border-radius:9px; font:inherit; color:inherit; background:var(--panel,#fff); }
+          .lass-library-dialog .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
+          .lass-library-dialog button { padding:9px 20px; border:0; border-radius:9px; background:#64748b20; color:inherit; font:inherit; cursor:pointer; }
+          .lass-library-dialog button[value=ok] { background:#4169ed; color:#fff; }
+        `;
+        const form = doc.createElement("form");
+        const title = doc.createElement("h2");
+        title.id = "lass-dialog-title";
+        title.textContent = message;
+        form.appendChild(title);
+        const input = doc.createElement("input");
+        if (value !== null) {
+          input.value = value;
+          input.required = true;
+          input.maxLength = 200;
+          input.setAttribute("aria-label", message);
+          form.appendChild(input);
+        }
+        const footer = doc.createElement("div");
+        footer.className = "dialog-actions";
+        for (const [label, action] of [["취소", "cancel"], [value === null ? "삭제" : "확인", "ok"]]) {
+          const control = doc.createElement("button");
+          control.textContent = label;
+          control.value = action;
+          control.type = action === "ok" ? "submit" : "button";
+          if (action === "cancel") control.onclick = () => dialog.close();
+          footer.appendChild(control);
+        }
+        form.appendChild(footer);
+        let result = null;
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (value !== null && !input.value.trim()) {
+            input.setCustomValidity("이름을 입력해 주세요.");
+            input.reportValidity();
+            return;
+          }
+          result = value === null ? true : input.value.trim();
+          dialog.close();
+        });
+        input.addEventListener("input", () => input.setCustomValidity(""));
+        const onUnload = () => dialog.close();
+        dialog.addEventListener("close", () => {
+          window.removeEventListener("unload", onUnload);
+          dialog.remove(); resolve(result);
+        }, {once:true});
+        dialog.append(style, form);
+        doc.body.appendChild(dialog);
+        dialog.showModal();
+        if (value !== null) { input.focus(); input.select(); }
+        window.addEventListener("unload", onUnload, {once:true});
+      });
+    }
+
     function showMenu(event, kind, item) {
       event.preventDefault();
       event.stopPropagation();
@@ -116,21 +187,38 @@
       title.textContent = item.name || item.title;
       menu.appendChild(title);
 
-      if (kind === "folder") {
-        menu.appendChild(button("이름 변경", () => {
-          const name = window.prompt("폴더 이름", item.name);
+      if (kind === "session") {
+        menu.appendChild(button("이름 변경", async () => {
+          const name = await ask("대화 이름", item.title);
+          if (name && name.trim()) post("rename_session", {session_id:item.id, name:name.trim()});
+        }));
+        menu.appendChild(button("대화 삭제", async () => {
+          if (await ask(`'${item.title}' 대화와 기록을 삭제할까요?`, null)) post("delete_session", {session_id:item.id});
+        }, "danger"));
+      } else if (kind === "folder") {
+        menu.appendChild(button("새 노트", async () => {
+          const title = await ask(`'${item.name}' 폴더에 만들 노트 이름`, "새 노트");
+          if (title && title.trim()) {
+            post("create_note", { title: title.trim(), folder_id: item.id });
+          }
+        }));
+        const separator = document.createElement("div");
+        separator.className = "menu-separator";
+        menu.appendChild(separator);
+        menu.appendChild(button("이름 변경", async () => {
+          const name = await ask("폴더 이름", item.name);
           if (name && name.trim() && name.trim() !== item.name) {
             post("rename_folder", { folder_id: item.id, name: name.trim() });
           }
         }));
-        menu.appendChild(button("폴더 삭제", () => {
-          if (window.confirm(`'${item.name}' 폴더를 삭제할까요?\n안의 노트는 미분류로 이동합니다.`)) {
+        menu.appendChild(button("폴더 삭제", async () => {
+          if (await ask(`'${item.name}' 폴더를 삭제할까요?\n안의 노트는 미분류로 이동합니다.`, null)) {
             post("delete_folder", { folder_id: item.id });
           }
         }, "danger"));
       } else {
-        menu.appendChild(button("이름 변경", () => {
-          const name = window.prompt("노트 이름", item.title);
+        menu.appendChild(button("이름 변경", async () => {
+          const name = await ask("노트 이름", item.title);
           if (name && name.trim() && name.trim() !== item.title) {
             post("rename_note", { note_id: item.id, name: name.trim() });
           }
@@ -139,12 +227,31 @@
         const separator = document.createElement("div");
         separator.className = "menu-separator";
         menu.appendChild(separator);
-        menu.appendChild(button("노트 삭제", () => {
-          if (window.confirm(`'${item.title}' 노트를 삭제할까요?\n녹음, 요약, 녹취, 메모가 모두 삭제됩니다.`)) {
+        menu.appendChild(button("노트 삭제", async () => {
+          if (await ask(`'${item.title}' 노트를 삭제할까요?\n녹음, 요약, 녹취, 메모가 모두 삭제됩니다.`, null)) {
             post("delete_note", { note_id: item.id });
           }
         }, "danger"));
       }
+      positionMenu(event.clientX, event.clientY);
+    }
+
+    function showCreateMenu(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      menu.innerHTML = "";
+      const title = document.createElement("div");
+      title.className = "menu-title";
+      title.textContent = "새로 만들기";
+      menu.appendChild(title);
+      menu.appendChild(button("새 폴더", async () => {
+        const name = await ask("새 폴더 이름", "");
+        if (name && name.trim()) post("create_folder", { name: name.trim() });
+      }));
+      menu.appendChild(button("새 노트", async () => {
+        const title = await ask("새 노트 이름", "새 노트");
+        if (title && title.trim()) post("create_note", { title: title.trim() });
+      }));
       positionMenu(event.clientX, event.clientY);
     }
 
@@ -174,10 +281,12 @@
     function noteRow(note) {
       const row = document.createElement("div");
       row.className = `note-row${note.id === state.selected_id ? " selected" : ""}`;
-      row.title = `${note.title}\n${note.source_name}`;
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.title = note.source_name ? `${note.title}\n${note.source_name}` : note.title;
       const icon = document.createElement("span");
       icon.className = "note-icon";
-      icon.textContent = "▤";
+      icon.innerHTML = noteIcon;
       const copy = document.createElement("span");
       copy.className = "note-copy";
       const title = document.createElement("span");
@@ -185,11 +294,19 @@
       title.textContent = note.title;
       const meta = document.createElement("span");
       meta.className = "note-meta";
-      meta.textContent = note.status === "ready" ? (note.source_name || "정리 완료") : ({draft:"작성 중", processing:"처리 중", failed:"처리 실패"}[note.status] || note.status);
+      meta.textContent = state.mode === "sessions" ? "저장된 대화" : note.status === "ready" ? (note.source_name || "정리 완료") : ({draft:"작성 중", processing:"처리 중", failed:"처리 실패"}[note.status] || note.status);
       copy.append(title, meta);
       row.append(icon, copy);
-      row.addEventListener("click", () => post("select_note", { note_id: note.id }));
-      row.addEventListener("contextmenu", (event) => showMenu(event, "note", note));
+      const select = () => state.mode === "sessions" ? post("select_session", {session_id:note.id}) : post("select_note", {note_id:note.id});
+      row.addEventListener("click", select);
+      row.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(); }
+        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+          const rect = row.getBoundingClientRect();
+          showMenu({preventDefault:()=>event.preventDefault(), stopPropagation:()=>event.stopPropagation(), clientX:rect.x, clientY:rect.bottom}, state.mode === "sessions" ? "session" : "note", note);
+        }
+      });
+      row.addEventListener("contextmenu", (event) => showMenu(event, state.mode === "sessions" ? "session" : "note", note));
       return row;
     }
 
@@ -198,12 +315,15 @@
       block.className = `folder${expanded.has(folder.id) ? " open" : ""}`;
       const row = document.createElement("div");
       row.className = `folder-row${folder.id === state.selected_folder_id ? " selected-folder" : ""}`;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-expanded", String(expanded.has(folder.id)));
+      row.tabIndex = 0;
       const chevron = document.createElement("span");
       chevron.className = "chevron";
-      chevron.textContent = "▶";
+      chevron.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="chevron-closed" d="M7.5 5 12.5 10 7.5 15"/><path class="chevron-open" d="M5 7.5 10 12.5 15 7.5"/></svg>';
       const icon = document.createElement("span");
       icon.className = "folder-icon";
-      icon.textContent = "▰";
+      icon.innerHTML = folderIcon;
       const name = document.createElement("span");
       name.className = "folder-name";
       name.textContent = folder.name;
@@ -211,18 +331,16 @@
       count.className = "count";
       count.textContent = notes.length;
       row.append(chevron, icon, name, count);
-      chevron.addEventListener("click", (event) => {
-        event.stopPropagation();
+      const toggleFolder = () => {
         expanded.has(folder.id) ? expanded.delete(folder.id) : expanded.add(folder.id);
         render();
-      });
-      row.addEventListener("click", () => {
-        if (folder.id === "__unfiled__") {
-          expanded.has(folder.id) ? expanded.delete(folder.id) : expanded.add(folder.id);
-          render();
-        } else {
-          post("select_folder", { folder_id: folder.id });
-        }
+        if (folder.id !== "__unfiled__") post("select_folder", { folder_id: folder.id });
+      };
+      row.addEventListener("click", toggleFolder);
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        toggleFolder();
       });
       if (folder.id !== "__unfiled__") {
         row.addEventListener("contextmenu", (event) => showMenu(event, "folder", folder));
@@ -242,6 +360,12 @@
       app.appendChild(hint);
       const tree = document.createElement("div");
       tree.className = "tree";
+      if (state.mode === "sessions") {
+        state.sessions.forEach(session => tree.appendChild(noteRow(session)));
+        app.appendChild(tree);
+        setHeight(650);
+        return;
+      }
       const assigned = new Set();
       state.folders.forEach((folder) => {
         const notes = state.notes.filter((note) => note.folder_id === folder.id);
@@ -255,9 +379,13 @@
       if (!state.folders.length && !state.notes.length) {
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = "아직 노트가 없습니다.\n새 노트를 추가해 시작하세요.";
+        empty.textContent = "아직 노트가 없습니다.\n빈 공간을 우클릭해 폴더나 노트를 만드세요.";
         tree.appendChild(empty);
       }
+      tree.addEventListener("contextmenu", (event) => {
+        if (event.target.closest(".folder-row, .note-row")) return;
+        showCreateMenu(event);
+      });
       app.appendChild(tree);
       setHeight(650);
     }

@@ -2,8 +2,18 @@
 setlocal
 cd /d "%~dp0"
 
+if exist "dist\LASS\LASS.exe" (
+    start "" "%~dp0dist\LASS\LASS.exe" --root "%~dp0."
+    exit /b
+)
+
+if exist "dist\LASS.exe" (
+    start "" "%~dp0dist\LASS.exe" --root "%~dp0."
+    exit /b
+)
+
 if exist "LASS.exe" (
-    start "" "%~dp0LASS.exe"
+    start "" "%~dp0LASS.exe" --root "%~dp0."
     exit /b
 )
 
@@ -13,7 +23,7 @@ if not exist ".venv\Scripts\python.exe" (
     if errorlevel 1 exit /b 1
 )
 
-set "RUNTIME_VERSION=2026-09-14-bigvox-v1"
+set "RUNTIME_VERSION=2026-10-14-iq4-moonshine-v2.1"
 set "INSTALLED_VERSION="
 if exist ".venv\.lass-runtime-version" set /p INSTALLED_VERSION=<".venv\.lass-runtime-version"
 if not "%INSTALLED_VERSION%"=="%RUNTIME_VERSION%" (

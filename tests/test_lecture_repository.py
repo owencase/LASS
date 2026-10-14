@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
@@ -28,7 +29,7 @@ class LectureRepositoryTests(unittest.TestCase):
                 )
 
             self.assertEqual(repository.get_media(note.id), b"12345678")
-            with repository._connect() as connection:
+            with closing(repository._connect()) as connection:
                 chunk_count = connection.execute(
                     "SELECT count(*) FROM lecture_media_chunks WHERE lecture_id = ?",
                     (note.id,),
@@ -191,12 +192,12 @@ class LectureRepositoryTests(unittest.TestCase):
             summarized = repository.replace_summary(
                 note.id,
                 summary="메모를 포함한 새 요약",
-                prompt_key="default_summary",
+                prompt_key="lecture_detail",
                 prompt_name="기본 핵심 요약",
                 vector_collection="new-vector",
             )
             self.assertEqual(summarized.summary, "메모를 포함한 새 요약")
-            self.assertEqual(summarized.prompt_key, "default_summary")
+            self.assertEqual(summarized.prompt_key, "lecture_detail")
 
             repository.add_chat_message(folder.id, "user", "핵심은?")
             repository.add_chat_message(folder.id, "assistant", "수정된 녹취입니다.")

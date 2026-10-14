@@ -10,7 +10,8 @@ from typing import Dict, Iterable, Tuple
 
 
 MANIFEST_FILENAME = "lass-model-manifest.json"
-REQUIRED_FILES = ("config.json", "tokenizer.json", "tokenizer_config.json")
+GGUF_FILENAME = 'EXAONE-4.0-1.2B.i1-IQ4_XS.gguf'
+REQUIRED_FILES = (GGUF_FILENAME,)
 
 
 @dataclass(frozen=True)
@@ -54,10 +55,14 @@ class LocalModelManager:
         )
 
     def status(self) -> ModelStatus:
-        missing = [name for name in REQUIRED_FILES if not (self.model_dir / name).is_file()]
-        weight_files = tuple(self.model_dir.glob("*.safetensors"))
+        missing = [name for name in REQUIRED_FILES if not (self.model_dir / name).is_file() or not (self.model_dir / name).stat().st_size]
+        weight_files = tuple(path for path in self.model_dir.glob(GGUF_FILENAME) if path.stat().st_size)
         if not weight_files:
-            missing.append("*.safetensors")
+            missing.append(GGUF_FILENAME)
+        if weight_files:
+            with weight_files[0].open('rb') as handle:
+                if handle.read(4) != b'GGUF':
+                    missing.append('valid GGUF header')
         total_bytes = sum(path.stat().st_size for path in self._asset_files())
         return ModelStatus(
             model_id=self.model_id,
@@ -75,7 +80,7 @@ class LocalModelManager:
             missing = ", ".join(status.missing_files)
             raise RuntimeError(
                 f"EXAONE local model is incomplete at {status.path} "
-                f"(missing: {missing}). Run `python scripts/manage_models.py download`."
+                f"(missing: {missing}). Check the internet connection and restart LASS to prepare the model."
             )
         return status
 

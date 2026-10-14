@@ -54,6 +54,14 @@ class NoteSourcesTests(unittest.TestCase):
         second = self.repo.complete_source(source['id'], transcript='중복 내용')
         self.assertEqual(first.transcript, second.transcript)
 
+    def test_source_processing_state_can_resume_and_complete(self):
+        source = self.source('slides.pdf')
+        self.repo.begin_source_processing(source['id'])
+        self.assertEqual(self.repo.get_source(source['id'])['status'], 'processing')
+        note = self.repo.complete_source(source['id'], transcript='PDF 자료')
+        self.assertEqual(self.repo.get_source(source['id'])['status'], 'ready')
+        self.assertIn('PDF 자료', note.transcript)
+
     def test_live_chunks_append_and_recent_view_is_bounded(self):
         first = self.repo.append_live_transcription(
             self.note.id,
@@ -88,16 +96,16 @@ class NoteSourcesTests(unittest.TestCase):
         source = self.source()
         pipeline = Mock()
         pipeline.transcribe.return_value = Transcription('전사 결과', 'ko', 2, [])
-        pipeline.resummarize.side_effect = RuntimeError('summary failed')
+        pipeline.resummarize_pages.side_effect = RuntimeError('summary failed')
         with self.assertRaisesRegex(RuntimeError, 'summary failed'):
             process_source(self.repo, source, self.settings, lambda: pipeline,
-                           'default_summary', 'ko', True, lambda value: None)
+                           'lecture_detail', 'ko', True, lambda value: None)
         self.assertEqual(self.repo.get_source(source['id'])['status'], 'ready')
         self.assertIn('전사 결과', self.repo.get(self.note.id).transcript)
-        pipeline.resummarize.side_effect = None
-        pipeline.resummarize.return_value = Mock(summary='요약 완료', prompt_name='기본 요약', vector_collection=None)
+        pipeline.resummarize_pages.side_effect = None
+        pipeline.resummarize_pages.return_value = Mock(summary='요약 완료', prompt_name='기본 요약', vector_collection=None)
         process_source(self.repo, self.repo.get_source(source['id']), self.settings, lambda: pipeline,
-                       'default_summary', 'ko', True, lambda value: None)
+                       'lecture_detail', 'ko', True, lambda value: None)
         self.assertEqual(pipeline.transcribe.call_count, 1)
         self.assertEqual(self.repo.get(self.note.id).summary, '요약 완료')
 

@@ -1,0 +1,2 @@
+# CUDA llama.cpp wheel; also supports CPU inference.
+-r requirements.txt

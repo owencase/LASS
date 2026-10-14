@@ -1,15 +1,71 @@
-"""Bounded, page-at-a-time OCR with a native macOS fast path."""
+"""Bounded, page-at-a-time OCR."""
 
 from __future__ import annotations
 
 import gc
 import io
-import sys
+import re
+from statistics import median
 from typing import Any, BinaryIO
 
 
 MAX_IMAGE_EDGE = 2400
 MAX_IMAGE_PIXELS = 4_000_000
+
+
+def layout_text(result):
+    """Recover line order, visible word gaps and code indentation from OCR boxes."""
+    texts = list(result.txts or ())
+    boxes = getattr(result, "boxes", None)
+    if boxes is None or len(boxes) != len(texts):
+        return "\n".join(str(text) for text in texts if str(text).strip())
+    words = getattr(result, "word_results", ()) or ()
+    rows = []
+    for index, (box, text) in enumerate(zip(boxes, texts)):
+        x = min(float(p[0]) for p in box)
+        y = min(float(p[1]) for p in box)
+        height = max(float(p[1]) for p in box) - y
+        width = max(float(p[0]) for p in box) - x
+        unit = max(1, width / max(1, len(str(text))))
+        if index < len(words) and isinstance(words[index], (tuple, list)):
+            items = [item for item in words[index] if isinstance(item, (tuple, list)) and len(item) == 3 and item[2] is not None]
+            if items and "".join(str(item[0]) for item in items).replace(" ", "") == str(text).replace(" ", ""):
+                rebuilt, right = "", None
+                for word, _, bounds in sorted(items, key=lambda item: min(p[0] for p in item[2])):
+                    left = min(p[0] for p in bounds)
+                    if right is not None and left - right > unit * .4:
+                        rebuilt += " "
+                    rebuilt += str(word)
+                    right = max(p[0] for p in bounds)
+                text = rebuilt
+        rows.append((y, x, height, unit, str(text)))
+    rows.sort()
+    groups = []
+    for row in rows:
+        y, x, height, unit, text = row
+        previous = groups[-1][0] if groups else None
+        if previous and abs(y + height / 2 - previous[0] - previous[2] / 2) < max(height, previous[2]) * .6:
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+    lines = []
+    for group in groups:
+        ordered = sorted(group, key=lambda row: row[1])
+        first = ordered[0]
+        lines.append((*first[:4], " ".join(row[4] for row in ordered)))
+    baseline = min((line[1] for line in lines), default=0)
+    unit = median([line[3] for line in lines]) if lines else 1
+    output, in_code = [], False
+    for _, x, _, _, text in lines:
+        code = bool(re.search(r"\b(?:def|class|import|return|public|function|const|let)\b|[{};]|\b\w+\s*=|\w+\.\w+\(", text))
+        if code != in_code:
+            output.append("```" if code else "```")
+            in_code = code
+        indent = min(32, max(0, round((x - baseline) / max(1, unit)))) if code else 0
+        output.append(" " * indent + text)
+    if in_code:
+        output.append("```")
+    return "\n".join(output)
 
 
 def _prepared_jpeg(source: bytes | BinaryIO) -> bytes:
@@ -53,53 +109,10 @@ class OCRReader:
         if not image:
             return ""
         try:
-            if sys.platform == "darwin":
-                return self._read_vision(image)
             return self._read_rapidocr(image)
         finally:
             del image
             gc.collect()
-
-    @staticmethod
-    def _read_vision(image: bytes) -> str:
-        try:
-            from Foundation import NSData
-            import Vision
-        except ImportError as exc:
-            raise RuntimeError(
-                "macOS 이미지 OCR에는 pyobjc-framework-Vision이 필요합니다."
-            ) from exc
-
-        data = NSData.dataWithBytes_length_(image, len(image))
-        request = Vision.VNRecognizeTextRequest.alloc().init()
-        request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
-        request.setUsesLanguageCorrection_(True)
-        if hasattr(request, "setAutomaticallyDetectsLanguage_"):
-            request.setAutomaticallyDetectsLanguage_(True)
-        try:
-            request.setRecognitionLanguages_(["ko-KR", "en-US"])
-        except Exception:
-            pass
-        handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(data, {})
-        succeeded, error = handler.performRequests_error_([request], None)
-        if not succeeded:
-            detail = f": {error}" if error is not None else ""
-            raise RuntimeError(f"macOS Vision OCR을 실행할 수 없습니다{detail}")
-        observations = list(request.results() or [])
-        observations.sort(
-            key=lambda item: (
-                -float(item.boundingBox().origin.y),
-                float(item.boundingBox().origin.x),
-            )
-        )
-        lines = []
-        for observation in observations:
-            candidates = observation.topCandidates_(1)
-            if candidates:
-                text = str(candidates[0].string()).strip()
-                if text:
-                    lines.append(text)
-        return "\n".join(lines)
 
     def _read_rapidocr(self, image: bytes) -> str:
         if self._rapid is None:
@@ -114,7 +127,7 @@ class OCRReader:
                 )
             except ImportError as exc:
                 raise RuntimeError(
-                    "Windows/Linux 이미지 OCR에는 rapidocr와 onnxruntime이 필요합니다."
+                    "Windows 이미지 OCR에는 rapidocr와 onnxruntime이 필요합니다."
                 ) from exc
             self._rapid = RapidOCR(
                 params={
@@ -128,10 +141,8 @@ class OCRReader:
                     "Rec.ocr_version": OCRVersion.PPOCRV5,
                 }
             )
-        result = self._rapid(image)
-        return "\n".join(
-            str(text).strip() for text in (result.txts or ()) if str(text).strip()
-        )
+        result = self._rapid(image, return_word_box=True, return_single_char_box=True)
+        return layout_text(result)
 
     def close(self) -> None:
         self._rapid = None

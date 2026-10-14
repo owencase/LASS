@@ -1,0 +1,4 @@
+This Moonshine AI Model is licensed under the Moonshine AI Community License, Copyright © Moonshine AI Ltd. All Rights Reserved
+Powered by Moonshine AI
+Korean Tiny uses the Community License. English Medium Streaming and the library use MIT.
+Model weights are unchanged.

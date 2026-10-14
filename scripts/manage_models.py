@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import platform
 import sys
 from pathlib import Path
 from typing import Dict
@@ -15,25 +14,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import Settings  # noqa: E402
-from src.llm.model_manager import MANIFEST_FILENAME, LocalModelManager  # noqa: E402
+from src.llm.model_manager import MANIFEST_FILENAME, LocalModelManager, GGUF_FILENAME  # noqa: E402
 
 
-DOWNLOAD_PATTERNS = (
-    "*.json",
-    "*.jinja",
-    "*.safetensors",
-    "LICENSE",
-    "README.md",
-)
+DOWNLOAD_PATTERNS = (GGUF_FILENAME,)
 
 
-def _manager(runtime: str) -> LocalModelManager:
+def _manager() -> LocalModelManager:
     settings = Settings.from_env()
     settings.ensure_directories()
-    if runtime == "mlx":
-        return LocalModelManager(
-            settings.exaone_mlx_model_id, settings.exaone_mlx_model_dir
-        )
     return LocalModelManager(settings.exaone_model_id, settings.exaone_model_dir)
 
 
@@ -110,23 +99,20 @@ def verify(manager: LocalModelManager) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    default_runtime = (
-        "mlx" if platform.system() == "Darwin" and platform.machine() == "arm64" else "transformers"
-    )
-    parser.add_argument(
-        "--runtime",
-        choices=("mlx", "transformers"),
-        default=default_runtime,
-        help="model runtime to manage (Apple Silicon defaults to mlx)",
-    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("status", help="show local EXAONE asset status")
     download_parser = subparsers.add_parser("download", help="download the model snapshot")
-    download_parser.add_argument("--revision", default="main")
+    download_parser.add_argument("--revision", default='10e7d7d52ff49b7c95dd16275bc9c290e2ddad4a')
     subparsers.add_parser("verify", help="verify sizes and SHA-256 checksums")
+    subparsers.add_parser("download-stt", help="download the Moonshine Korean and English assets")
     args = parser.parse_args()
-
-    manager = _manager(args.runtime)
+    if args.command == "download-stt":
+        from src.stt.moonshine import ensure_model
+        settings = Settings.from_env()
+        ensure_model(settings.stt_model_dir)
+        print(settings.stt_model_dir)
+        return 0
+    manager = _manager()
     if args.command == "download":
         return download(manager, args.revision)
     if args.command == "verify":

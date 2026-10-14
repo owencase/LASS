@@ -15,25 +15,19 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 
-RUNTIME_ROOTS = {
-    "accelerate",
-    "faster-whisper",
-    "funasr",
-    "huggingface-hub",
-    "packaging",
-    "pip",
-    "pyloudnorm",
-    "pypdf",
-    "pyyaml",
-    "setuptools",
-    "streamlit",
-    "streamlit-pdf",
-    "torch",
-    "torchaudio",
-    "transformers",
-    "urllib3",
-    "wheel",
-}
+def runtime_roots() -> Set[str]:
+    environment = default_environment()
+    roots = {"pip", "setuptools", "wheel"}
+    requirements = Path(__file__).resolve().parent.parent / "requirements.txt"
+    for line in requirements.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "--")):
+            continue
+        requirement = Requirement(line)
+        if not requirement.marker or requirement.marker.evaluate(environment):
+            roots.add(canonicalize_name(requirement.name))
+    return roots
+
 
 
 def installed_distributions() -> Dict[str, metadata.Distribution]:
@@ -99,7 +93,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     distributions = installed_distributions()
-    required = dependency_closure(distributions, RUNTIME_ROOTS)
+    required = dependency_closure(distributions, runtime_roots())
     orphans = sorted(set(distributions) - required)
     if not orphans:
         print("Runtime is already minimal.")

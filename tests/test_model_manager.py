@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.llm.model_manager import LocalModelManager
+from src.llm.model_manager import LocalModelManager, GGUF_FILENAME
 
 
 class LocalModelManagerTests(unittest.TestCase):
@@ -13,8 +13,8 @@ class LocalModelManagerTests(unittest.TestCase):
             status = manager.status()
 
             self.assertFalse(status.ready)
-            self.assertIn("config.json", status.missing_files)
-            self.assertIn("*.safetensors", status.missing_files)
+            self.assertIn(GGUF_FILENAME, status.missing_files)
+            self.assertEqual(status.weight_files, 0)
 
     def test_verifies_managed_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -23,7 +23,7 @@ class LocalModelManagerTests(unittest.TestCase):
                 "config.json": b"{}",
                 "tokenizer.json": b"{}",
                 "tokenizer_config.json": b"{}",
-                "model.safetensors": b"weights",
+                GGUF_FILENAME: b"GGUFweights",
             }
             for name, content in files.items():
                 (model_dir / name).write_bytes(content)

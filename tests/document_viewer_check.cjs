@@ -1,0 +1,20 @@
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs');
+const events = {};
+const stage = {clientWidth:700,clientHeight:500,addEventListener(name,handler){events[name]=handler}};
+const context = vm.createContext({document:{getElementById(id){return id==='stage'?stage:{}},addEventListener(){}},
+  ResizeObserver:class {observe(){}}, window:{addEventListener(){},parent:{postMessage(){}}}});
+const html = fs.readFileSync('src/ui/document_component/frontend/index.html','utf8');
+vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
+vm.runInContext('current={naturalWidth:1000,naturalHeight:1400,style:{}};args={fit:true,zoom:100};resize()',context);
+assert.equal(vm.runInContext('current.style.height',context),'500px');
+vm.runInContext('args.fit=false;resize()',context);
+assert.equal(vm.runInContext('current.style.width',context),'357px');
+vm.runInContext('args.zoom=125;resize()',context);
+assert.equal(vm.runInContext('current.style.width',context),'446px');
+let prevented = false; events.wheel({preventDefault(){prevented=true},deltaY:100});
+assert.ok(prevented);
+assert.match(html, /#stage[^}]+overflow:hidden/);
+assert.doesNotMatch(html, /scrollLeft = drag|button.click\(\)/);
+console.log('PASS: 100% fits viewport; zoom remains clipped and wheel cannot navigate');

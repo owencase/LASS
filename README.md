@@ -1,295 +1,101 @@
-# ✦ LASS — Local AI Study Studio
+> **LASS 2.1.1 IQ4_XS** — 독립 프로젝트입니다. [변경 및 실행 안내](README-MOONSHINE.md)를 먼저 확인하세요.
 
-![Version](https://img.shields.io/badge/version-1.2.0-9a7cff.svg)
-![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
-![Model](https://img.shields.io/badge/EXAONE_4.0-1.2B-c9ff63.svg)
-![License](https://img.shields.io/badge/code_license-MIT-green.svg)
+# LASS · Local AI Summarizer System
 
-LASS는 강의, 회의, 인터뷰 녹음을 내 컴퓨터 안에서 텍스트와 학습 노트로
-변환하고 계속 관리하는 로컬 AI 강의 워크스페이스입니다. 음성 인식, 검색,
-요약, 결과 저장까지 외부 추론 API 없이 처리합니다.
+Windows 10/11 x64용 강의 노트 앱입니다. 한국어·영어 음성과 PDF/PPT를 전사하고 **강의 상세 노트**로 정리합니다.
 
-요약 모델은 **LG AI Research EXAONE 4.0 1.2B**입니다. Apple Silicon에서는
-`models/exaone-4.0-1.2b-mlx-4bit/`의 4비트 모델을 기본으로 사용하고, 그 밖의
-환경에서는 `models/exaone-4.0-1.2b/`의 Transformers 모델을 사용할 수 있습니다.
-준비된 요약 모델은 실행 중 Ollama 서버나 Hugging Face 네트워크를 사용하지 않습니다.
-STT 모델은 로컬 캐시에 없을 때 최초 사용 시에만 내려받습니다.
+## 배포 및 실행
 
-## 주요 특징
+**일반 설치는 `dist/installer/LASS-Setup-2.1.1.exe`를 실행하세요.** Python·GGUF CUDA/CPU 런타임·Moonshine STT·Streamlit·WebView UI·프롬프트가 포함됩니다. 모델 가중치는 설치 후 최초 실행 화면에서 별도로 다운로드합니다. 이미 다운로드된 프로젝트 모델로 실행하려면 `LASS.bat`을 사용하세요.
 
-- **로컬 우선 프라이버시**: 업로드 파일과 생성 결과를 프로젝트의 `data/` 안에서 관리합니다.
-- **저메모리 EXAONE 추론**: Apple Silicon에서 MLX 4비트 가중치와 8비트 KV 캐시를 사용합니다.
-- **모델 수명 주기 관리**: 다운로드, 상태 조회, SHA-256 무결성 검증 CLI를 제공합니다.
-- **긴 강의 STT 안정화**: VAD 전에 BS.1770 통합 음량을 -16 LUFS로 맞추고, 10분이 넘는 녹음은 5분 단위로 문맥을 초기화해 반복 환각이 뒤 구간 전체로 번지는 현상을 줄입니다.
-- **SenseVoice Small 기본 STT**: 한국어를 포함한 다국어 SenseVoice Small을 FunASR의 FSMN-VAD와 함께 사용하며, 기존 faster-whisper 모델도 설정에서 계속 선택할 수 있습니다.
-- **Bigvox 한국어 STT**: `bigdefence/Bigvox-Exaone4-Audio`를 전용 EXAONE 멀티모달 런타임으로 실행하며, 긴 녹음은 모델 입력 크기에 맞춰 30초씩 처리합니다.
-- **사용자 모델 목록**: 설정에서 STT/LLM 프로필을 추가·제거하고 활성 모델을 즉시 바꿀 수 있습니다.
-- **두 가지 고대비 테마**: 다크/라이트 모두 선택 컨트롤의 2px 반대색 테두리와 명확한 활성 색을 유지합니다.
-- **조절 가능한 워크스페이스**: 자료·AI 패널을 각각 닫거나 다시 열고, 본문/균형/AI 폭 프리셋을 선택합니다.
-- **폴더·파일 방식 관리**: 왼쪽에서 폴더를 만들고, 노트나 폴더를 우클릭해 이름 변경·이동·삭제합니다.
-- **노트별 분리 보기**: 자료·녹음, 전체 텍스트, 내 메모 중 현재 화면만 렌더링합니다.
-- **슬라이드형 PDF 보기**: 파일 선택과 대용량 원본 연결을 제공하며, 스크롤 대신 `이전 장`·`다음 장`으로 한 페이지씩 봅니다.
-- **대용량 원본과 바로 녹음**: 큰 녹음·영상을 받고 브라우저 마이크로 즉시 녹음할 수 있습니다.
-- **안정적인 Markdown 편집**: AI 요약을 정상 렌더링하고 더블클릭 편집 중 다른 위젯이 바뀌어도 편집 화면을 유지합니다.
-- **메모 포함 AI 재요약**: 저장한 내 메모와 수정한 녹취를 함께 참고해 새 요약을 만듭니다.
-- **배포용 앱 셸**: Streamlit의 Deploy/개발 툴바를 숨기고 서버를 `127.0.0.1`에만 열어 로컬 프로그램처럼 실행합니다.
-- **3단 노트 작업공간**: 왼쪽 탐색, 가운데 자료·녹취·메모, 오른쪽 AI 요약을 동시에 확인하거나 필요한 패널만 남깁니다.
-- **폴더 전용 로컬 채팅**: 목록에서는 메타데이터만 읽고, 질문할 때 SQLite에서 노트를 한 건씩 가져와 EXAONE이 답합니다.
-- **노트부터 시작**: 빈 노트를 먼저 만들고 메모·여러 녹음·PDF를 나중에 추가합니다.
-- **디스크 스트리밍 검색**: 임베딩 모델 대신 SQLite FTS5/BM25를 사용해 검색 데이터가 RAM이 아닌 `vectors.db`에서 커집니다.
-- **계층형 전체 요약**: 모든 조각을 하나씩 읽고 근거 메모를 디스크에 쓴 뒤 최대 4개씩 반복 압축합니다. 자료 크기가 늘어도 최종 LLM 입력은 함께 커지지 않습니다.
-- **메모리 절약**: 전사·검색·요약을 순차 실행하고, 각 생성 호출과 단계가 끝날 때 입력 객체·모델·GPU 캐시를 해제합니다.
-- **데스크톱 실행**: Mac `.app` / Windows `.exe`로 전용 창을 열고, 닫을 때 서버도 종료합니다.
-- **교체 가능한 요약 양식**: YAML 프롬프트로 기본 요약, 강의 필기, 회의 액션 아이템을 선택합니다.
-- **재사용하는 단일 검색 파일**: 내용 지문이 같은 인덱스는 다시 만들지 않으며, FTS 검색 인덱스를 `vectors.db` 하나에 저장합니다.
-- **필요할 때 내보내기**: Markdown은 자동으로 중복 저장하지 않고 다운로드할 때 생성합니다.
+최초 실행에서 모델이 없으면 전용 다운로드 화면을 표시합니다. EXAONE 4.0 1.2B와 Moonshine Voice 각각의 **다운로드** 버튼을 누르면 실제 전송량 기준 진행률을 표시합니다. 실패 시 **이어받기**로 재개하며, SHA-256과 파일 크기 검증을 통과한 파일만 확정합니다. 두 모델이 모두 준비되면 메인 화면으로 자동 이동하고, 다음 실행부터 기존 모델을 재사용합니다. 모델 다운로드에 인터넷 연결과 약 1GB의 추가 저장 공간이 필요합니다. WebView2가 없는 Windows에서는 Microsoft 공식 설치 프로그램으로 사용자 계정에 자동 설치합니다.
 
-## 처리 흐름
+노트·모델·로그·브라우저 캐시·임시 파일은 `%LOCALAPPDATA%\LASS-IQ4-Moonshine`에 저장합니다. 업데이트 설치 시 유지하며, Windows 앱 제거 시 이 버전의 데이터까지 모두 삭제합니다. 2.0.0 및 문서 폴더의 프로젝트·백업은 제거 대상이 아닙니다.
 
-```mermaid
-flowchart LR
-    A[오디오 / 비디오] --> N[-16 LUFS 정규화]
-    N --> V[빠른 발화 VAD]
-    V --> B[SenseVoice / Bigvox / Whisper]
-    P[PDF] --> Q[페이지 텍스트 추출]
-    Q --> D
-    B --> C[타임스탬프 스크립트]
-    C --> D[스트리밍 청킹]
-    D --> E[(vectors.db · FTS5/BM25)]
-    D --> R[모든 조각을 한 개씩 읽기]
-    R --> T[(계층형 근거 메모 · 임시 디스크)]
-    G[YAML Prompt] --> H[EXAONE 4.0 1.2B]
-    I[MLX 4-bit / Transformers safetensors] -.-> H
-    T --> H
-    A --> M[data/media · 원본 파일]
-    M --> J[(lass.db · 노트와 첨부 정보)]
-    B --> J
-    H --> J
-    J --> K[녹음 · 요약 · 녹취 · 메모]
-```
+포터블 배포는 `dist/LASS/` 폴더 전체를 전달하고 안의 `LASS.exe`를 실행합니다. 이 경우 EXE와 `_internal` 폴더를 함께 유지해야 합니다. `dist/LASS.exe`는 이 폴더로 연결하는 경량 실행 파일입니다. 프로젝트의 `LASS.bat`도 새 배포 경로를 우선 실행합니다.
 
-## 디렉터리
+## 앱 업데이트
 
-```text
-LASS/
-├── models/
-│   ├── exaone-4.0-1.2b-mlx-4bit/ # Apple Silicon 기본 4비트 모델
-│   └── exaone-4.0-1.2b/      # Transformers 호환 모델
-├── scripts/
-│   ├── manage_models.py       # download / status / verify
-│   └── prune_runtime.py       # 구형 의존성 탐지 및 정리
-├── src/
-│   ├── llm/                   # EXAONE 로더, 모델 관리자, 프롬프트, 요약기
-│   ├── rag/                   # 청킹, SQLite FTS5/BM25 디스크 검색
-│   ├── storage/               # SQLite 강의 CRUD 저장소
-│   ├── stt/                   # SenseVoice / Bigvox / faster-whisper 음성 인식
-│   ├── ui/                    # 가로형 Streamlit 강의 워크스페이스
-│   ├── config.py
-│   └── pipeline.py
-├── prompts/                   # 요약 양식 YAML
-├── data/
-│   ├── media/                 # 새 녹음·영상·PDF 원본
-│   ├── documents/             # 기존 PDF 원본
-│   ├── preview/               # 기존 DB 원본의 스트리밍용 복사본
-│   ├── logs/                  # 실행·오류 로그
-│   ├── lass.db                # 녹음·녹취·요약·메모 기준 저장소
-│   ├── model_registry.json    # 사용자 STT/LLM 프로필과 활성 모델
-│   └── vectors.db             # 파생 텍스트 검색 인덱스
-└── tests/
-```
+왼쪽 목록의 **앱 업데이트 → 업데이트 확인**에서 공식 GitHub 정식 릴리스를 확인합니다. **백업 후 업데이트 설치**는 설치 파일의 크기·SHA-256을 확인하고, DB·관리 첨부자료를 백업한 뒤 기존 설치 위에 새 버전을 설치합니다. 요약·마이크 녹음 중에는 업데이트를 막습니다. 업데이트 확인 전에는 릴리스 서버에 접속하지 않습니다.
 
-## 설치
+배포자는 정식 릴리스에 `LASS-Setup-<버전>.exe`와 빌드 시 생성되는 `.exe.sha256` 파일을 함께 첨부해야 합니다. 구현만으로 GitHub 릴리스가 자동 게시되지는 않습니다. 선택 이유, 배포 절차와 복구 방법은 [업데이트 관리 문서](docs/UPDATE_MANAGEMENT.md)에 정리했습니다.
 
-### 요구 사항
+## 모델과 결과 표시
 
-- Python 3.9 이상(3.10 이상 권장)
-- Apple Silicon: MLX 4비트 EXAONE 가중치 약 700MB와 실행 메모리 여유 공간
-- 기타 환경: Transformers EXAONE 가중치 약 2.56GB
-- 선택 사항: 추가 미디어 변환이 필요할 때 FFmpeg
+- STT: Moonshine Voice의 한국어 Tiny / 영어 Medium Streaming 양자화 ORT 모델을 CPU에서 실행합니다. 음성 인식 언어를 한국어 또는 영어로 선택하며, 기본은 한국어입니다. 20초 단위로 처리하고 마지막 짧은 구간도 처리합니다. 구간 내부의 Moonshine 시작 시각·길이를 전체 타임라인으로 변환하며 단어 단위 정밀 타임스탬프는 아닙니다.
+- LLM: EXAONE 4.0 1.2B IQ4_XS GGUF를 llama.cpp로 실행하고 LangChain 스트리밍으로 생성 중인 결과를 표시합니다. CUDA 12.4 실행 DLL과 CPU 실행 DLL을 번들하고 NVIDIA GPU를 자동 사용합니다. 호환 GPU가 없으면 CPU를 사용합니다. Moonshine 한국어 Tiny / 영어 Medium Streaming 전사는 CPU에서 실행합니다.
+- 요약은 `주제 → 학습 목표 → 개념 → 상세 내용 → 정리 → 중요 포인트` 순서의 마크다운 문서로 정규화합니다. 원문에 없는 내용은 추측하지 않습니다. project2의 프롬프트 로딩·스트리밍 기반을 유지하면서 이번 명세의 출력 형식과 버퍼 처리 규칙을 적용했습니다.
+- 원문은 페이지별 압축 SQLite 저장소에 보존하고 필요한 페이지만 해제합니다. 요약은 토큰 예산에 맞춰 작은 자료를 묶고, 제한된 메모리 버퍼에서 네 묶음씩 계층 통합합니다. 요약 중간 메모를 개별 디스크 파일에 쓰지 않습니다. 원문 페이지의 ID·번호 참조는 별도 링크 테이블에 보존합니다. 요약은 원문의 대체 저장소가 아닙니다.
+- 정확히 일치하는 시스템 프롬프트의 KV 접두부만 한 작업 안에서 재사용합니다. 모델 상시 적재 옵션은 제거했으며 성공·실패 후 추론 프로세스를 종료합니다. GPU 작업은 순차 실행됩니다.
+- 본문과 공존하는 이미지 영역도 OCR하고, 인식 좌표와 단어 간 간격으로 행 순서·띄어쓰기·코드 들여쓰기를 복원합니다. OCR 결과의 철자·대소문자까지 원본과 완전히 같음을 보장하지는 않으므로 코드는 원본 페이지와 대조할 수 있습니다. 실패 안내는 일회성 알림이며 재시작 시 실패 상태를 초기화합니다.
 
-```bash
-git clone https://github.com/your-username/LASS.git
-cd LASS
+요약은 백그라운드에서 실행되어 페이지 이동·메모 수정·노트 전환 중에도 계속됩니다. 같은 노트의 중복 요약은 막으며 완료 결과는 해당 노트에 저장합니다. 앱을 종료하면 진행 중인 작업은 종료됩니다. 실패 시 기존 요약을 유지합니다. 진행 안내는 상단 요약 결과 영역에만 표시하며 하단 반복 안내는 표시하지 않습니다.
 
+[Moonshine 모델 목록](https://moonshine-voice.readthedocs.io/en/stable/models/available-models/), [Moonshine 라이선스](https://github.com/moonshine-ai/moonshine/blob/main/LICENSE), [EXAONE 모델과 라이선스](https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B)를 참고하세요.
+
+## 작업 화면
+
+상단 메뉴바와 새 노트 버튼을 제거했습니다. 자료 목록의 우클릭 메뉴에서 새 노트를 만듭니다. 패널이 열리면 닫힘 아이콘만, 닫히면 열림 아이콘만 표시합니다. 좌우 패널 경계와 중앙 PDF·메모 경계는 선 없이 드래그하거나 방향키로 조절할 수 있습니다. 중앙 영역은 화면 전체 너비로 고정하고 좌우 패널이 그 위를 덮는 오버레이 방식입니다. 패널 토글·너비 조절로 PDF 위치나 크기가 바뀌지 않습니다. 열기·닫기 버튼을 계속 유지하고 투명도 전환과 클릭 지연을 제거했습니다. PDF 맞춤은 가로·세로를 모두 고려해 중앙에 표시합니다. PDF 페이지 화살표는 기존 위치와 크기를 유지합니다.
+
+앱 이름은 창 제목에 표시하고 내부 자료 목록은 ‘내 노트’로 표시합니다. 문서·요약선·AI 심볼을 조합한 전용 아이콘을 실행 파일, 창, 웹 파비콘에 사용합니다. Windows 앱 식별자는 `LASS.LocalAISummarizerSystem`입니다.
+
+Markdown 다운로드에는 요약·전사·메모가 포함됩니다. Windows WebView2 다운로드를 허용합니다. 기존 노트는 보존합니다. 예전 노트의 요약 형식 메타데이터는 새 요약 선택에 사용하지 않습니다.
+
+실시간 요약은 기존 요약 편집 영역 하나에서 표시됩니다. ‘내 메모 포함’ 체크박스는 요약 화면 하단에 바로 표시되고, 작업 시작 시 선택한 설정을 사용합니다.
+
+문서는 ‘PDF · PPT 추가’ 버튼 하나로 모든 크기를 처리합니다. EXE의 기본 파일 선택은 원본 경로를 사용하므로 브라우저 메모리에 파일 전체를 올리지 않고, 앱 자체의 파일 크기 제한도 없습니다. 브라우저 업로드의 한도는 파일당 2GB이며 이 방식은 업로드 파일 크기만큼 메모리를 사용합니다.
+
+PDF와 PowerPoint는 같은 뷰어에서 페이지 이동·확대·축소할 수 있습니다. 페이지 이동·확대·축소는 중앙 뷰어만 갱신합니다. 뷰어 프레임을 유지하고 다음 이미지의 디코딩이 끝나면 화면을 교체하여 로딩 중 빈 화면이 나타나지 않게 합니다. 현재 페이지만 최대 1600픽셀로 렌더링하고 디스크·브라우저 캐시를 재사용합니다. PowerPoint 또는 LibreOffice가 설치되어 있으면 PPT/PPTX를 PDF로 변환하여 원본 배치를 표시합니다. 둘 다 없는 PC에서도 PPTX는 기본 텍스트·이미지 미리보기를 제공합니다. 복잡한 도형·차트·그룹·테마는 기본 미리보기에서 원본과 다를 수 있습니다. 구형 `.ppt` 파일은 PowerPoint 또는 LibreOffice가 필요합니다.
+
+## 퀴즈와 전체 노트 채팅
+
+목록 위의 **Quiz**를 누르면 중앙 뷰어·메모 대신 퀴즈 전용 화면이 열립니다. 과목 폴더를 선택하고 문제를 생성하면 O/X 10문항과 4지선다 10문항이 저장됩니다. 모든 문항은 한 화면에서 스크롤하여 확인하며 OMR 답안 카드에 체크합니다. 시험지와 OMR은 상하·좌우 배치를 지원합니다. 응시 시작부터 제출까지의 시간, 점수와 답안을 과목 기록에 자동 저장합니다. 저장된 시험은 재응시할 수 있으며 **문제 재생성**은 기존 시험을 유지하고 새 시험을 추가합니다.
+
+출제는 LangChain의 Pydantic structured output parser로 검증합니다. 원문 녹취·문서 텍스트를 사용하고, 원문이 없으면 직접 작성한 메모를 사용합니다. AI 요약은 시험 근거로 사용하지 않습니다. 문장 일치 여부나 코드 조각 대신 개념·원리·적용을 평가하는 문제를 요청합니다. O/X와 객관식 모두 출제 정답을 숨긴 별도 검수로 원문 근거·학습 가치·정답을 확인합니다. 정답이 여러 개거나 판정과 출제 정답이 다르면 저장하지 않습니다. 잘못된 출력은 해당 문항만 최대 12번 재시도하며 검증된 초안은 이어서 생성할 수 있습니다. 기존 시험·응시 기록은 유지하고 미검수 초안·중복 이력은 새 검수 이력과 분리합니다. 검토도 같은 로컬 모델을 사용하므로 자동 검증이 의미적 정확성이나 시험 수준을 보증하지는 않습니다. 제출 후 정답과 출처로 확인할 수 있습니다.
+
+**Chatting**은 노트·과목 선택 없이 바로 대화창을 엽니다. 폴더에 속하지 않은 노트를 포함한 전체 DB의 녹취·PDF/PPT 추출문·요약·메모를 자동 검색합니다. SQLite FTS 후보 검색 후 한국어 문자·단어 희소 벡터의 코사인 유사도로 정렬하므로 별도 임베딩 모델을 로딩하지 않습니다. 의미 임베딩 검색과 달리 표현이 완전히 다른 동의어에는 한계가 있습니다. 상위 원문 구간을 추려 답변 생성은 한 번만 수행합니다. 답변 아래 검색한 노트·파일·페이지/슬라이드 또는 섹션 위치를 표시합니다. 노트가 없거나 검색 근거가 없어도 일반 대화는 가능하며, 이때 ‘일반 답변 · 관련 노트 출처 없음’으로 표시합니다. 노트 변경 시 전체 인덱스를 갱신하고, 변경이 없으면 본문을 다시 읽지 않습니다. 대화 기록은 과목과 분리하여 저장합니다.
+
+퀴즈·채팅·요약의 공통 모델 입력 경계에서 문자열, LangChain 텍스트 블록, 문서 객체와 텍스트 목록을 문자열로 정규화합니다. 잘못된 유니코드를 정리하고 지원하지 않는 객체는 토크나이저 호출 전에 명확한 오류로 거부합니다. 채팅 템플릿은 먼저 문자열로 렌더링한 뒤 토큰화합니다. EXE와 추론 프로세스는 바이너리 파이프로 ASCII 이스케이프 JSON을 주고받아 Windows 기본 문자셋과 무관하게 한글 경로·질문·응답을 보존합니다. 프로세스 입출력과 오류 로그는 UTF-8로 명시합니다. 추론 실패의 상세 원인은 `data/logs/inference.log`에 기록합니다.
+
+채팅은 사용자 우측·AI 좌측 말풍선과 하단 입력창을 갖춘 화면입니다. 좌측 상단에서 대화 목록을 열고, 패널 안의 별도 아이콘으로 닫습니다. 우클릭으로 세션 이름 변경·삭제가 가능합니다. 우측 상단 아이콘으로 노트 화면에 복귀합니다. 한국어 출력 지시와 응답 검증을 함께 적용하며 한국어가 시작되면 토큰을 표시합니다. 검증 실패 시 한국어로 다시 작성하고, 반복 실패 시 오류를 표시합니다.
+
+문서 툴바에는 왼쪽 파일명, 가운데 페이지 이동·확대/축소·퍼센트 맞춤 토글, 오른쪽 문서 추가·배치 전환을 둡니다. 퍼센트 버튼의 강조 상태가 맞춤 활성화 상태를 나타냅니다. 좁은 화면에서는 페이지·맞춤 조작을 같은 줄로 묶어 두 번째 줄에 배치합니다.
+
+녹음 시작, 일시정지/재개, 정지는 독립된 버튼입니다. 경과 시간에서 일시정지 시간을 제외합니다. 마이크 컴포넌트는 한 번만 생성하여 패널 닫기·요약 탭·채팅·퀴즈 이동 중에도 유지하며, 구간은 녹음을 시작한 노트에 계속 저장합니다. 정지는 일시정지 상태에서도 가능하고 마지막 구간을 저장합니다. 앱 창을 종료하면 녹음도 종료됩니다.
+
+검증 완료 문항은 매번 SQLite에 즉시 저장합니다. 형식·출처·단일 정답 검증 실패나 일시적인 추론 오류는 해당 문항만 자동으로 최대 12번 재시도합니다. 세 번 실패할 때마다 다른 출제 근거로 전환하며, 추론 프로세스 장애는 해당 프로세스를 재시작합니다. 정상 문항은 다시 생성하지 않습니다. 지속적인 장애로 자동 복구 한도를 넘으면 **이어서 생성**으로 저장된 다음 번호부터 재개할 수 있습니다. 앱을 다시 실행해도 완료 문항은 유지됩니다. 출제 근거의 주제 키와 원문을 과목별 개념 이력으로 저장하고, 동일 주제·유사 문구 필터와 모델의 동의어·의미 중복 검토를 함께 적용합니다. 새 개념이 부족하면 기존 문항을 보존하고 노트 추가를 안내합니다. 의미 검토는 모델 판단이므로 완벽한 동의어 탐지를 보장하지 않습니다.
+
+**노트로 돌아가기**는 진입 직전 좌우 패널 상태와 선택 노트를 복원합니다. 뷰어의 **100%**는 메모를 제외한 가용 화면 안에 페이지 전체가 들어오는 크기입니다. 퍼센트 버튼으로 맞춤을 켜고 끄며, 확대 부분은 뷰어 경계에서 잘립니다. 뷰어의 스크롤·드래그 이동·휠 페이지 이동은 차단하고 페이지 버튼과 좌우 방향키로 이동합니다. 녹음 컨트롤은 단일 배경에 동일한 40×40 버튼을 사용합니다.
+
+## 개발 및 EXE 빌드
+
+빌드 환경은 Windows x64와 Python 3.10 이상이 필요합니다. 배포받는 사용자에게는 Python이 필요하지 않습니다.
+
+```powershell
 python -m venv .venv
-source .venv/bin/activate              # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+.venv\Scripts\python.exe -m pip install -r requirements-cuda.txt
+.venv\Scripts\python.exe -m pip install "pyinstaller>=6,<7"
+.venv\Scripts\python.exe -m src.desktop
+.venv\Scripts\python.exe scripts/build_desktop.py
+.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-## EXAONE 로컬 모델 준비
+소스 실행과 프로젝트의 `LASS.bat`은 프로젝트의 `data/`와 `models/`를 사용하여 기존 노트를 유지합니다. 배포 EXE를 단독 실행하면 사용자 데이터 폴더를 사용합니다. `.env.example`의 경로 설정으로 개발용 모델 저장소를 지정할 수 있습니다.
 
-공식 모델 스냅샷을 프로젝트 내부로 내려받습니다.
+빌드는 `--clean`으로 PyInstaller 분석 캐시를 갱신하며 `src/`의 모든 소스·정적 자산과 프롬프트를 포함합니다. Inno Setup 6가 설치되어 있으면 인스톨러까지 생성합니다. 별도 위치의 컴파일러는 `--iscc <ISCC.exe>`로 지정할 수 있고, 이미 검증된 번들에서 인스톨러만 다시 만들 때는 `--skip-bundle --iscc <ISCC.exe>`를 사용합니다. 빌드 완료 시 원본과 번들의 SHA-256을 비교해 누락·불일치가 있으면 실패하며, `_internal/build-info.json`에 빌드 시각과 해시를 기록합니다. `--self-test`도 이 목록을 검증하여 오래되거나 누락된 리소스를 탐지합니다.
 
-```bash
-python scripts/manage_models.py --runtime mlx download       # Apple Silicon
-python scripts/manage_models.py --runtime mlx status
-# 기타 환경: --runtime transformers
-```
+EXE 점검 모드: `LASS.exe --self-test --root <테스트폴더>`는 번들 런타임·UI·프롬프트를 검사한 뒤 `self-test.txt`를 만듭니다. 준비된 EXAONE이 있으면 실제 LangChain 응답을 `llm-test.txt`에 기록하고, 테스트 폴더에 `test.wav`를 넣으면 실제 전사 결과도 `transcription-test.txt`에 기록합니다. `--prepare-models`는 모델 준비, `--serve <포트>`는 로컬 서버 점검에 사용합니다. 데스크톱 로그는 `data/logs/desktop.log`에 기록됩니다.
 
-다운로드 후 선택한 런타임의 모델 폴더에 다음 자산이 함께 저장됩니다.
+## 실행 피드백과 CUDA 점검
 
-- `model.safetensors` — EXAONE 가중치
-- `config.json`, `generation_config.json` — 모델 설정
-- `tokenizer.json`, `vocab.json`, `chat_template.jinja` — 토크나이저와 대화 템플릿
-- `LICENSE`, `README.md` — 원본 라이선스와 모델 카드
-- `lass-model-manifest.json` — 파일 크기와 SHA-256 체크섬
+EXE 창은 배경색과 로딩 화면을 준비한 뒤 표시합니다. WebView가 실제 다운로드 화면 또는 메인 화면을 렌더링할 때까지 Windows 로딩 덮개를 유지하여 초기 브라우저 배경 노출을 막습니다. 모델 준비와 CUDA 초기화는 시작 로딩을 막지 않으며, 모델이 없으면 다운로드 화면으로 진입합니다. 브라우저에서 직접 실행할 때는 기존 노트 작업공간과 선택적인 모델 다운로드 영역을 유지합니다. 새 폴더·노트 생성, 이름 변경과 삭제 확인은 화면 중앙 모달에서 처리합니다. 패널 토글에는 짧은 전환 효과를 사용하고, OS의 동작 줄이기 설정을 따릅니다.
 
-무결성 검사는 모든 관리 파일을 다시 해시합니다.
+CUDA 빌드는 llama-cpp-python 0.3.36 + CUDA 12.4 배포본을 사용합니다. PyTorch와 Transformers는 EXE에서 제외합니다. 확인한 환경은 RTX 3050 Ti Laptop GPU, NVIDIA 드라이버 537.70입니다. GPU 초기화는 실제 추론 시 수행합니다. 명시적 `--prepare-models` 점검 모드는 `data/runtime-device.json`에 GPU 진단을 기록합니다. `LASS_EXAONE_DEVICE=auto|cuda|cpu` 환경 변수로 추론 장치를 지정할 수 있습니다. 강제 CUDA 지정 후 GPU를 사용할 수 없으면 오류를 표시합니다. GPU 드라이버는 EXE에 포함하지 않습니다.
 
-```bash
-python scripts/manage_models.py --runtime mlx verify
-```
+LLM 호출은 LangChain `ChatPromptTemplate → MessagesPlaceholder → EXAONEChatModel → StrOutputParser` 체인을 공유합니다. 대화 이력은 SQLite에 세션별로 영구 보관하고 최근 8개 메시지를 다음 요청에 전달합니다. STT는 Moonshine의 인식 구간 콜백으로 완료된 구간을 즉시 표시하며, 인식 완료 결과를 DB에 저장합니다. 음성 업로드의 하위 추가 액션에서 파일 등록이 완료되면 선택 영역을 닫고 다음 업로드의 입력 키를 갱신합니다.
 
-추론 로더는 `local_files_only=True`와 `trust_remote_code=False`를 강제합니다.
-따라서 모델 준비 후에는 요약 과정에서 원격 모델 코드나 파일을 가져오지 않습니다.
+## 패치·업데이트 자동 백업
 
-> 가중치는 용량 때문에 Git에는 커밋하지 않습니다. 현재 작업 폴더에서는 로컬 자산으로
-> 관리되며, 다른 장치에서 저장소를 새로 받은 경우 `download`를 한 번 실행해야 합니다.
-> 재배포 전에는 모델 폴더의 EXAONE `LICENSE`를 확인하세요.
+패치 적용은 `.venv/Scripts/python.exe scripts/apply_patch.py <patch.diff>`로 실행합니다. Git 사전 검사를 통과하면 소스·설정 ZIP 백업 후 패치를 적용합니다. 빌드 시작 시에도 자동 백업합니다. 설치 프로그램은 기존 설치 파일을 덮어쓰기 전에 소스·설정을 백업하며 실패하면 설치를 중단합니다. 앱 내 업데이트는 별도로 SQLite 백업 API로 노트·첨부자료도 보존합니다.
 
-## 실행
-
-설치가 끝난 배포 폴더에서는 **Mac은 `LASS.app`, Windows는 `LASS.exe` 아이콘을 더블클릭**합니다.
-콘솔이나 브라우저 탭 없이 운영체제 WebView의 전용 창만 엽니다. 서버 준비·오류 안내도
-창 안에 표시하며, 창을 닫으면 해당 서버를 종료합니다. 다시 아이콘을 누르면 이미 열린
-창을 표시하여 AI 서버가 중복 실행되지 않게 합니다. 로그는 `data/logs/`에 있습니다.
-
-개발자가 실행기를 처음 만들 때:
-
-```bash
-.venv/bin/python -m pip install 'pyinstaller>=6,<7'
-.venv/bin/python scripts/build_desktop.py
-# Windows: .venv\Scripts\python.exe scripts\build_desktop.py
-```
-
-Windows 실행기는 Windows에서 빌드해야 합니다. `--windowed`로 콘솔을 제거하며,
-자식 Python 서버에도 `CREATE_NO_WINDOW`를 적용합니다. Mac은 네이티브 `.app` 번들을 만듭니다.
-OS WebView(WebKit / WebView2)를 사용하므로 Electron용 Chromium을 별도로 묶지 않습니다.
-Windows에는 WebView2 Runtime이 필요합니다.
-
-**현재 배포 단위는 실행기와 프로젝트 폴더입니다.** 실행기만 다른 폴더로 옮기지 말고
-`src/`, `prompts/`, `requirements.txt`, `.streamlit/`, `models/`와 함께 보관하세요.
-대형 모델·ML 환경은 실행기에 넣지 않습니다. 최초 실행 시 설치된 Python으로 `.venv`를 만들거나
-의존성을 동기화하므로, 사용자에게 배포하기 전 같은 운영체제에서 환경과 모델을 준비하는 것을 권장합니다.
-코드 서명 인증서·공증·설치 마법사·자동 업데이트는 포함하지 않습니다.
-
-`LASS.command`와 `LASS.bat`는 개발/초기 준비용 호환 실행기입니다. 일반 사용자는
-`.app` / `.exe`를 사용합니다. Linux나 브라우저에서 개발하려면 `./run_lass.sh` 또는
-`.venv/bin/python -m streamlit run src/ui/app.py`로 실행할 수 있습니다.
-
-### STT 모델 선택
-
-상단 `설정 → 모델 → STT`에는 SenseVoice Small, Bigvox EXAONE 4 Audio,
-faster-whisper가 기본 등록됩니다. `Bigvox · EXAONE 4 Audio`를 선택하면 최초 전사 때
-[Bigvox 체크포인트](https://huggingface.co/bigdefence/Bigvox-Exaone4-Audio)를 Hugging Face
-캐시에 내려받습니다. 체크포인트는 약 3.87GB이며 Whisper-large-v3 음성 인코더 가중치를
-포함하므로, 다운로드 공간 외에도 모델과 중간 텐서를 위한 충분한 RAM/VRAM이 필요합니다.
-Bigvox는 한국어 전용이며 타임스탬프를 직접 출력하지 않아 LASS가 30초 처리 구간을
-타임라인 구간으로 사용합니다.
-
-### 노트 작성
-
-1. `＋ 노트 추가`를 누르면 모델·파일 없이 빈 노트가 즉시 저장됩니다. 선택한 폴더가 있으면 그 안에 만듭니다.
-2. `내 메모`에서 먼저 작성하거나, `자료 · 녹음`에서 파일을 저장합니다. 같은 노트에 여러 녹음·영상·PDF를 붙일 수 있습니다.
-3. 큰 파일은 `로컬 파일 경로`에서 `컴퓨터에서 파일 선택`으로 직접 연결합니다. 브라우저 업로드는 200MB까지이며, 직접 연결은 그 제한을 받지 않습니다. 외부 원본의 위치를 유지하세요.
-4. 자료를 저장한 뒤 전사/PDF 텍스트 추출을 실행합니다. 요약 모델이 준비되면 `추출 후 전체 노트 요약`도 선택할 수 있습니다.
-5. 전사·추출 결과는 요약 전에 저장됩니다. 요약이 실패해도 원본·텍스트·메모는 남고, 재시도 시 전사를 반복하지 않습니다.
-
-원본 미리보기는 요청할 때만 열며 오디오·영상·PDF는 byte range로 스트리밍합니다. PDF는 페이지 폭에 맞춰 열리고 페이지를 이동해도 뷰어와 확대율을 유지합니다.
-`자료 · 녹음` / `전체 텍스트` / `내 메모`는 선택한 화면만 렌더링합니다.
-AI 요약과 음성 녹취는 더블클릭 편집이 가능하며, 혼합 자료의 음성은 `음성 녹취 수정`에서 편집합니다.
-요약 화면에서 저장한 메모를 포함해 다시 요약하거나 Markdown으로 내보낼 수 있습니다.
-
-`data/lass.db`에는 노트·첨부 경로·녹취·요약·메모·폴더 대화를 저장합니다.
-새 업로드 원본은 `data/media/`에, 기존 DB 안의 원본은 그대로 유지합니다.
-따라서 **백업은 DB만이 아니라 `data/` 전체와 직접 연결한 외부 원본**을 포함해야 합니다.
-노트 삭제 시 앱이 관리하는 첨부 파일만 함께 삭제하며 외부 원본은 유지합니다.
-
-### Apple M칩 GPU와 메모리
-
-상단 `설정 → 모델 → 실행 장치`에서 기존 프로필의 장치를 변경할 수 있습니다.
-`자동`은 CUDA → Apple GPU(MPS) → CPU 순으로 선택합니다. `Apple M칩 GPU (Metal / MPS)`를 직접 선택해도 됩니다.
-SenseVoice는 MPS를 사용할 수 있습니다. 기본 EXAONE은 MLX에서 4비트로 로드하며 KV 캐시는 8비트로 제한합니다.
-SenseVoice는 안정성을 위해 FP32를 유지합니다. 지원하지 않는 일부 PyTorch 연산에는 CPU fallback을 허용합니다.
-Bigvox는 FP16 체크포인트이며 `자동` 선택 시 CUDA, MPS, CPU 순으로 사용 가능한 장치를 고릅니다.
-공식 구현은 CUDA 기준이므로 CPU에서는 실행 시간이 매우 길 수 있습니다.
-
-faster-whisper의 CTranslate2는 Apple GPU를 지원하지 않으므로 Mac에서는 CPU를 사용합니다.
-Apple GPU로 전사하려면 SenseVoice를 선택하세요. 기존 모델 선택은 자동으로 바꾸지 않습니다.
-근거: [CTranslate2 하드웨어 지원](https://github.com/OpenNMT/CTranslate2/blob/master/docs/hardware_support.md),
-[PyTorch MPS](https://docs.pytorch.org/docs/main/mps.html).
-
-16GB 환경을 위한 기본 동작:
-
-- 작업을 한 번에 하나씩 실행하고, 전사 → 검색 → 요약 사이와 실패 시에도 모델을 해제합니다.
-- 청크와 FTS 인덱스 행은 작은 배치로 SQLite에 써서 문서 전체 청크·벡터 배열을 RAM에 만들지 않습니다.
-- 요약은 모든 조각을 한 개씩 읽습니다. 중간 근거는 디스크에 쓰고 최대 4개씩 계층적으로 압축합니다.
-- 폴더 질문은 내용 지문으로 기존 SQLite FTS 인덱스를 재사용하고 관련 조각만 읽습니다. LLM 입력은 기본 2,048 토큰으로 제한합니다.
-- 폴더 화면은 제목 등 메타데이터만 불러오고, 채팅 검색 시 전체 노트를 SQLite 커서로 한 건씩 읽습니다.
-- SenseVoice는 60초 구간(경계 겹침 포함), 15초 추론 배치로 처리합니다. 음량 분석도 전체 오디오 복사 없이 필터 상태와 400ms 구간 에너지를 계산합니다.
-- 브라우저에 원본 전체를 보내지 않고, 자료 업로드·화면·라이브러리 목록의 불필요한 메모리 복사를 줄입니다.
-
-모델을 매번 다시 읽으므로 연속 작업의 시작 시간은 늘 수 있습니다. Apple GPU도 시스템 RAM을 공유합니다.
-파일 크기·선택 모델·길이·OS에 따라 최대 사용량이 달라지므로 16GB에서의 고정 RAM 상한을 보장하지는 않습니다.
-
-## 설치 용량 관리
-
-이 저장소의 실행 UI는 Electron/Chromium 번들을 포함하지 않는 Streamlit 앱입니다.
-가중치인 `models/`, 사용자 자료인 `data/`, Python 런타임인 `.venv/`는 앱 소스와
-분리되어 있으며 실행기 바이너리 내부에 묶지 않습니다. 사용자 배포 폴더에는 준비된 환경과 모델을 함께 둘 수 있습니다. 기존 환경에 ChromaDB나
-`sentence-transformers`가 남아 있다면 다음 명령으로 제거 후보와 회수 용량을 먼저
-확인한 뒤 정리할 수 있습니다.
-
-```bash
-python scripts/prune_runtime.py
-python scripts/prune_runtime.py --apply
-python -m pip check
-```
-
-검색 시 임베딩 모델을 로드하지 않습니다. STT의 BS.1770 음량 측정에 필요한
-`pyloudnorm`/SciPy는 유지 대상입니다.
-현재 개발 환경에서는 `.venv`가 약 1.1GB에서 966MB로 줄었으며, 모델과 사용자 DB는
-삭제하지 않았습니다.
-
-## 환경 변수
-
-| 이름 | 기본값 | 설명 |
-|---|---|---|
-| `LASS_EXAONE_MODEL_ID` | `LGAI-EXAONE/EXAONE-4.0-1.2B` | 매니페스트에 기록할 공식 모델 ID |
-| `LASS_EXAONE_MODEL_DIR` | `./models/exaone-4.0-1.2b` | 프로젝트 로컬 모델 경로 |
-| `LASS_EXAONE_MLX_MODEL_ID` | `mlx-community/exaone-4.0-1.2b-4bit` | Apple Silicon 4비트 모델 ID |
-| `LASS_EXAONE_MLX_MODEL_DIR` | `./models/exaone-4.0-1.2b-mlx-4bit` | Apple Silicon 4비트 모델 경로 |
-| `LASS_EXAONE_DEVICE` | `auto` | `auto`, `cuda`, `mps`, `cpu` |
-| `LASS_EXAONE_MAX_INPUT_TOKENS` | `2048` | 요약 입력 토큰 상한(512~32768) |
-| `LASS_EXAONE_MAX_NEW_TOKENS` | `384` | 요약 최대 생성 토큰 수 |
-| `LASS_EXAONE_TEMPERATURE` | `0.1` | 한국어 생성 안정성을 위한 낮은 기본 온도 |
-| `LASS_WHISPER_MODEL` | `large-v3` | 함께 유지되는 faster-whisper 모델 또는 로컬 경로 |
-| `LASS_STT_TARGET_LUFS` | `-16` | VAD 전에 적용할 BS.1770 통합 음량 목표(-30~-5) |
-| `LASS_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | 기존 벡터 인덱스 호환 설정(새 FTS 경로에서는 로드하지 않음) |
-| `LASS_CHUNK_SIZE` | `1200` | 스크립트 청크 크기 |
-| `LASS_CHUNK_OVERLAP` | `150` | 청크 간 중첩 길이 |
-
-## 프롬프트 커스터마이징
-
-`prompts/`의 YAML 파일에서 요약 목적을 수정하거나 새 양식을 추가할 수 있습니다.
-각 파일에는 반드시 `{context}`가 포함된 `user_prompt`가 있어야 합니다.
-
-```yaml
-name: "강의 상세 노트"
-description: "개념과 예시를 구조화한 학습 노트"
-system_prompt: |
-  당신은 학습자가 복습하기 좋은 한국어 노트를 만드는 조교입니다.
-user_prompt: |
-  다음 강의 내용을 구조화해 주세요:
-  {context}
-```
-
-## 테스트
-
-```bash
-python -m unittest discover -s tests -v
-python scripts/manage_models.py verify
-```
-
-코드 라이선스는 MIT입니다. EXAONE 모델 가중치에는 모델 폴더에 포함된 별도
-EXAONE 라이선스가 적용됩니다.
+기본 경로는 Windows의 실제 문서 폴더 아래 `Backups`이며 `LASS_BACKUP_DIR` 환경 변수 또는 패치 도구의 `--backup-dir`로 지정할 수 있습니다. 모델·빌드 산출물은 소스 백업에서 제외합니다. ZIP에는 `.env` 등 설정이 포함될 수 있으므로 개인 백업 폴더에서 보관하세요. 편집기에서 직접 파일을 수정하는 행위는 자동 감지하지 않으므로 패치 도구를 사용해야 수정 직전 버전이 보존됩니다.

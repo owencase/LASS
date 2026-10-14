@@ -93,7 +93,7 @@ def _decode_pcm16(source: Path, destination: Path) -> None:
     except ImportError as exc:
         raise RuntimeError(
             "PyAV is required for speech audio preparation. "
-            "It is installed with faster-whisper."
+            "Install dependencies with `pip install -r requirements.txt`."
         ) from exc
     av_error = getattr(av, "FFmpegError", getattr(av, "AVError", Exception))
 

@@ -39,11 +39,13 @@ class PromptManager:
     def list_templates(self) -> List[PromptTemplate]:
         if not self.prompt_directory.is_dir():
             raise FileNotFoundError(f"Prompt directory not found: {self.prompt_directory}")
-        return [self.load(path.stem) for path in sorted(self.prompt_directory.glob("*.yaml"))]
+        return [self.load("lecture_detail")]
 
     def load(self, key: str) -> PromptTemplate:
         if not key or Path(key).name != key:
             raise ValueError("Prompt key must be a plain file name without a path")
+        if key != "lecture_detail":
+            raise ValueError("강의 상세 노트 형식만 지원합니다.")
         path = self.prompt_directory / f"{key}.yaml"
         if not path.is_file():
             raise FileNotFoundError(f"Prompt template not found: {path}")

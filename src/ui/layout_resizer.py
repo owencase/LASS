@@ -15,13 +15,17 @@ _layout_resizer = components.declare_component(
 def render_layout_resizer(
     content_layout: str,
     *,
+    library_open: bool = True,
+    right_open: bool = True,
     transcript_version: int = 0,
     transcript_active: bool = False,
     key: str = "lass-layout-resizer",
 ) -> None:
-    """Mount the PDF/memo splitter without resizing the outer sidebars."""
+    """Mount the PDF/memo and sidebar splitters."""
     _layout_resizer(
         content_layout="side" if content_layout == "side" else "stack",
+        library_open=bool(library_open),
+        right_open=bool(right_open),
         transcript_version=max(0, int(transcript_version)),
         transcript_active=bool(transcript_active),
         default=None,

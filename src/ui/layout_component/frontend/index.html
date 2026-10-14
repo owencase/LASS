@@ -10,6 +10,15 @@
   let transcriptObserver = null;
   let observedTranscript = null;
   let resizeTimer = null;
+  let installedKeyboardHandler = null;
+  const keyboardHandlerKey = "__lassPdfKeyboardNavigation";
+  let hoverTextObserver = null;
+  const hoverTextObserverKey = "__lassHoverTextObserver";
+  let pdfStage = null;
+  let pdfResizeObserver = null;
+  let pdfDomObserver = null;
+  const pdfDomObserverKey = "__lassPdfDomObserver";
+  let pdfSetupFrame = null;
 
   function sendHeight() {
     window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:0}, "*");
@@ -45,14 +54,17 @@
     handle.innerHTML = '<span aria-hidden="true"></span>';
     layout.insertBefore(handle, memoPane);
 
-    const available = () => Math.max(260, layout.getBoundingClientRect().height - 5);
+    const available = () => Math.max(1, layout.getBoundingClientRect().height - 5);
     const apply = (documentHeight) => {
       const total = available();
-      const bounded = Math.max(130, Math.min(total - 130, documentHeight));
+      const minimum = Math.min(130, total * .35);
+      const bounded = Math.max(minimum, Math.min(total - minimum, documentHeight));
       documentPane.style.setProperty("flex", `0 0 ${bounded}px`, "important");
       documentPane.style.setProperty("height", `${bounded}px`, "important");
       memoPane.style.setProperty("flex", `0 0 ${total - bounded}px`, "important");
       memoPane.style.setProperty("height", `${total - bounded}px`, "important");
+      handle.setAttribute("aria-valuemin", String(Math.round(minimum)));
+      handle.setAttribute("aria-valuemax", String(Math.round(total - minimum)));
       handle.setAttribute("aria-valuenow", String(Math.round(bounded)));
       return bounded;
     };
@@ -99,11 +111,14 @@
     handle.innerHTML = '<span aria-hidden="true"></span>';
     layout.insertBefore(handle, memoPane);
 
-    const available = () => Math.max(420, layout.getBoundingClientRect().width - 5);
+    const available = () => Math.max(1, layout.getBoundingClientRect().width - 5);
     const apply = (documentWidth) => {
       const total = available();
-      const bounded = Math.max(240, Math.min(total - 220, documentWidth));
+      const minimum = Math.min(160, total * .35);
+      const bounded = Math.max(minimum, Math.min(total - minimum, documentWidth));
       layout.style.setProperty("--lass-document-width", `${bounded}px`);
+      handle.setAttribute("aria-valuemin", String(Math.round(minimum)));
+      handle.setAttribute("aria-valuemax", String(Math.round(total - minimum)));
       handle.setAttribute("aria-valuenow", String(Math.round(bounded)));
       return bounded;
     };
@@ -177,6 +192,73 @@
     }
   }
 
+  function setupSidebarSplitters() {
+    const shell = parentDocument.querySelector(".st-key-lass-layout");
+    if (!shell) return;
+    const observers = window.parent.__lassSidebarObservers ||= {};
+    for (const [side, observer] of Object.entries(observers)) {
+      if (!shell.querySelector(side === "left" ? ".st-key-lass-library-pane" : ".st-key-lass-ai-pane")) {
+        observer.disconnect();
+        delete observers[side];
+      }
+    }
+    for (const [side, selector, fallback] of [
+      ["left", ".st-key-lass-library-pane", 300],
+      ["right", ".st-key-lass-ai-pane", 400],
+    ]) {
+      const pane = shell.querySelector(selector);
+      if (!pane || pane.querySelector(".lass-sidebar-resizer")) continue;
+      const column = pane.closest('[data-testid="stColumn"]');
+      const storageKey = `lass-sidebar-${side}-width-v1`;
+      const handle = parentDocument.createElement("div");
+      handle.className = `lass-sidebar-resizer lass-sidebar-${side}`;
+      handle.tabIndex = 0;
+      handle.setAttribute("role", "separator");
+      handle.setAttribute("aria-orientation", "vertical");
+      handle.setAttribute("aria-label", side === "left" ? "자료 목록 너비 조절" : "AI 패널 너비 조절");
+      const apply = (width) => {
+        const maximum = Math.max(220, Math.min(640, shell.clientWidth - 48));
+        const bounded = Math.max(220, Math.min(maximum, width));
+        column.style.setProperty("--lass-sidebar-width", `${bounded}px`);
+        positionRecorder();
+        handle.setAttribute("aria-valuemin", "220");
+        handle.setAttribute("aria-valuemax", String(Math.round(maximum)));
+        handle.setAttribute("aria-valuenow", String(Math.round(bounded)));
+        resizePdfPage();
+        return bounded;
+      };
+      const saved = Number(window.localStorage.getItem(storageKey));
+      apply(saved > 0 && Number.isFinite(saved) ? saved : fallback);
+      observers[side]?.disconnect();
+      const observer = observers[side] = new ResizeObserver(() => apply(column.getBoundingClientRect().width));
+      observer.observe(shell);
+      handle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = column.getBoundingClientRect().width;
+        handle.setPointerCapture(event.pointerId);
+        const move = (e) => apply(startWidth + (e.clientX - startX) * (side === "left" ? 1 : -1));
+        const finish = () => {
+          window.localStorage.setItem(storageKey, String(column.getBoundingClientRect().width));
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", finish);
+          handle.removeEventListener("pointercancel", finish);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", finish);
+        handle.addEventListener("pointercancel", finish);
+      });
+      handle.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const delta = (event.key === "ArrowRight" ? 16 : -16) * (side === "left" ? 1 : -1);
+        window.localStorage.setItem(storageKey, String(apply(column.getBoundingClientRect().width + delta)));
+      });
+      pane.appendChild(handle);
+      window.addEventListener("unload", () => { observer.disconnect(); handle.remove(); }, {once:true});
+    }
+  }
+
   function setupTranscriptAutoscroll() {
     const transcript = parentDocument.querySelector(".st-key-lass-transcript-stream");
     if (!transcript) return;
@@ -190,21 +272,232 @@
     transcriptObserver.observe(transcript, {childList:true,subtree:true});
   }
 
-  function setup() {
-    setupCenterLayout();
-    setupTranscriptAutoscroll();
+  function isTextEntryTarget(target) {
+    if (!(target instanceof window.parent.HTMLElement)) return false;
+    return Boolean(target.closest(
+      'input, textarea, select, [contenteditable="true"], [role="textbox"], ' +
+      '.CodeMirror, .cm-editor, .ProseMirror, .lass-center-resizer, .lass-sidebar-resizer'
+    ));
   }
+
+  function installPdfKeyboardNavigation() {
+    const owner = window.parent;
+    const previousHandler = owner[keyboardHandlerKey];
+    if (previousHandler) parentDocument.removeEventListener("keydown", previousHandler);
+
+    const handler = (event) => {
+      if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (isTextEntryTarget(event.target)) return;
+      if (!parentDocument.querySelector('.lass-pdf-page, iframe[src*="src.ui.document_viewer.lass_document_viewer"]')) return;
+      const direction = event.key === "ArrowLeft" ? "previous" : "next";
+      const button = parentDocument.querySelector(
+        `[class*="st-key-pdf-${direction}-"] button:not(:disabled)`
+      );
+      if (!button) return;
+      event.preventDefault();
+      button.click();
+    };
+    installedKeyboardHandler = handler;
+    owner[keyboardHandlerKey] = handler;
+    parentDocument.addEventListener("keydown", handler);
+  }
+
+  function resizePdfPage() {
+    const stage = pdfStage;
+    const page = stage?.querySelector(".lass-pdf-page");
+    if (!page?.naturalWidth || !page?.naturalHeight) return;
+    const style = window.parent.getComputedStyle(stage);
+    const width = Math.max(1, stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+    const height = Math.max(1, stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom));
+    const baseScale = contentLayout === "side" ? width / page.naturalWidth : height / page.naturalHeight;
+    const zoom = stage.dataset.fit === "true" ? 1 : Number(stage.dataset.zoom) || 1;
+    page.style.width = `${Math.round(page.naturalWidth * baseScale * zoom)}px`;
+    page.style.height = `${Math.round(page.naturalHeight * baseScale * zoom)}px`;
+
+  }
+
+  function setupPdfViewer() {
+    const stage = parentDocument.querySelector(".lass-pdf-stage");
+    if (stage === pdfStage) {
+      resizePdfPage();
+      return;
+    }
+    pdfResizeObserver?.disconnect();
+    pdfStage = stage;
+    if (!stage) return;
+    const page = stage.querySelector(".lass-pdf-page");
+    if (page) {
+      page.draggable = false;
+      if (!page.complete) page.addEventListener("load", resizePdfPage, {once:true});
+    }
+    pdfResizeObserver = new ResizeObserver(resizePdfPage);
+    pdfResizeObserver.observe(stage);
+    stage.addEventListener("wheel", (event) => event.preventDefault(), {passive:false});
+    resizePdfPage();
+  }
+
+  function observePdfViewer() {
+    window.parent[pdfDomObserverKey]?.disconnect();
+    pdfDomObserver = new MutationObserver(() => {
+      if (pdfSetupFrame !== null) return;
+      pdfSetupFrame = window.requestAnimationFrame(() => {
+        pdfSetupFrame = null;
+        setupSidebarSplitters();
+        const layout = parentDocument.querySelector(".st-key-lass-document-memo-layout");
+        if (layout && !layout.querySelector(":scope > .lass-center-resizer")) setupCenterLayout();
+        setupPdfViewer();
+        setupChatDraft();
+        positionRecorder();
+      });
+    });
+    pdfDomObserver.observe(parentDocument.body, {
+      childList:true, subtree:true, attributes:true, attributeFilter:["data-fit", "data-zoom"],
+    });
+    window.parent[pdfDomObserverKey] = pdfDomObserver;
+  }
+
+  function suppressHoverText() {
+    const clearTitles = (root) => {
+      if (root instanceof window.parent.Element && root.hasAttribute("title")) {
+        root.removeAttribute("title");
+      }
+      root.querySelectorAll?.("[title]").forEach((node) => node.removeAttribute("title"));
+    };
+    clearTitles(parentDocument);
+    window.parent[hoverTextObserverKey]?.disconnect();
+    hoverTextObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === "attributes") mutation.target.removeAttribute("title");
+        mutation.addedNodes.forEach((node) => clearTitles(node));
+      });
+    });
+    hoverTextObserver.observe(parentDocument.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["title"],
+    });
+    window.parent[hoverTextObserverKey] = hoverTextObserver;
+  }
+
+  const panelHandlerKey = "__lassPanelTransitionHandler";
+  const previousPanelHandler = window.parent[panelHandlerKey];
+  if (previousPanelHandler) parentDocument.removeEventListener("click", previousPanelHandler, true);
+  const panelHandler = (event) => {
+    const button = event.target.closest?.(".st-key-close-library-panel button, .st-key-close-right-panel button, .st-key-toggle-library-panel button, .st-key-toggle-right-panel button");
+    const shell = parentDocument.querySelector(".st-key-lass-layout");
+    if (!button || !shell) return;
+    const left = button.closest(".st-key-close-library-panel, .st-key-toggle-library-panel");
+    const key = left ? "libraryOpen" : "rightOpen";
+    shell.dataset[key] = String(shell.dataset[key] !== "true");
+    positionRecorder();
+    window.setTimeout(positionRecorder, 220);
+    // Let the original click reach Streamlit immediately; do not hide/fade icons.
+  };
+  window.parent[panelHandlerKey] = panelHandler;
+  parentDocument.addEventListener("click", panelHandler, true);
+
+  function setup() {
+    setupChatDraft();
+    setupSidebarSplitters();
+    setupCenterLayout();
+    setupPdfViewer();
+    observePdfViewer();
+    setupTranscriptAutoscroll();
+    installPdfKeyboardNavigation();
+    suppressHoverText();
+    positionRecorder();
+  }
+
+  function setupChatDraft() {
+    const marker = parentDocument.querySelector("#lass-chat-draft");
+    const field = parentDocument.querySelector('[data-testid="stChatInputTextArea"]');
+    if (!marker || !field || field.dataset.lassDraftSession === marker.dataset.session) return;
+    field.dataset.lassDraftSession = marker.dataset.session;
+    const key = `lass-chat-draft:${marker.dataset.session}`;
+    try {
+      const saved = JSON.parse(window.parent.localStorage.getItem(key) || "null");
+      if (saved?.revision === marker.dataset.revision && saved.text && !field.value) {
+        const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, "value").set;
+        setter.call(field, saved.text);
+        field.dispatchEvent(new window.parent.Event("input", {bubbles:true}));
+      }
+      if (saved && saved.revision !== marker.dataset.revision) window.parent.localStorage.removeItem(key);
+    } catch (_) {}
+    if (field.__lassDraftHandler) field.removeEventListener("input", field.__lassDraftHandler);
+    field.__lassDraftHandler = () => {
+      try {
+        const revision = parentDocument.querySelector("#lass-chat-draft")?.dataset.revision;
+        window.parent.localStorage.setItem(key, JSON.stringify({text:field.value, revision}));
+      } catch (_) {}
+    };
+    field.addEventListener("input", field.__lassDraftHandler);
+  }
+
+  function positionRecorder() {
+    const host = parentDocument.querySelector(".st-key-lass-recorder-host");
+    const slot = parentDocument.querySelector(".lass-recorder-slot");
+    const shell = parentDocument.querySelector(".st-key-lass-layout");
+    if (!host) return;
+    const visible = slot && shell?.dataset.rightOpen === "true";
+    host.style.visibility = visible ? "visible" : "hidden";
+    host.style.pointerEvents = visible ? "auto" : "none";
+    if (visible) {
+      const rect = slot.getBoundingClientRect();
+        const pane = slot.closest(".st-key-lass-ai-pane")?.getBoundingClientRect();
+        const top = pane ? Math.max(pane.top, Math.min(rect.top, pane.bottom - rect.height)) : rect.top;
+        Object.assign(host.style, {left:`${rect.left}px`,top:`${top}px`,width:`${rect.width}px`});
+    }
+    // Hiding the controls never removes/reparents the microphone iframe.
+  }
+  window.parent.__lassRecorderObserver?.disconnect();
+  const recorderObserver = new ResizeObserver(positionRecorder);
+  recorderObserver.observe(parentDocument.documentElement);
+  window.parent.__lassRecorderObserver = recorderObserver;
+  if (window.parent.__lassRecorderPosition) parentDocument.removeEventListener("scroll", window.parent.__lassRecorderPosition, true);
+  window.parent.__lassRecorderPosition = positionRecorder;
+  parentDocument.addEventListener("scroll", positionRecorder, true);
 
   window.addEventListener("message", (event) => {
     if (event.data?.type !== "streamlit:render") return;
     contentLayout = event.data.args?.content_layout === "side" ? "side" : "stack";
+    const shell = parentDocument.querySelector(".st-key-lass-layout");
+    if (shell) {
+      shell.dataset.libraryOpen = String(event.data.args?.library_open !== false);
+      shell.dataset.rightOpen = String(event.data.args?.right_open !== false);
+    }
     sendHeight();
     window.setTimeout(setup, 0);
+    window.setTimeout(positionRecorder, 220);
     window.setTimeout(setupTranscriptAutoscroll, 120);
   });
   window.parent.postMessage({isStreamlitMessage:true,type:"streamlit:componentReady",apiVersion:1}, "*");
   sendHeight();
   setup();
+  window.addEventListener("unload", () => {
+    pdfResizeObserver?.disconnect();
+    layoutObserver?.disconnect();
+    transcriptObserver?.disconnect();
+    if (window.parent[panelHandlerKey] === panelHandler) {
+      parentDocument.removeEventListener("click", panelHandler, true);
+      delete window.parent[panelHandlerKey];
+    }
+    Object.values(window.parent.__lassSidebarObservers || {}).forEach((observer) => observer.disconnect());
+    window.parent.__lassSidebarObservers = {};
+    if (window.parent[pdfDomObserverKey] === pdfDomObserver) {
+      pdfDomObserver.disconnect();
+      delete window.parent[pdfDomObserverKey];
+    }
+    if (window.parent[keyboardHandlerKey] === installedKeyboardHandler) {
+      parentDocument.removeEventListener("keydown", installedKeyboardHandler);
+      delete window.parent[keyboardHandlerKey];
+    }
+    if (window.parent[hoverTextObserverKey] === hoverTextObserver) {
+      hoverTextObserver.disconnect();
+      delete window.parent[hoverTextObserverKey];
+    }
+  });
 </script>
 </body>
 </html>

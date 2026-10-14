@@ -18,6 +18,7 @@ def render_live_recorder(
     *,
     ack_nonce: str = "",
     theme: str = "dark",
+    note_id: str = "",
     key: str = "lass-live-recorder",
 ) -> Optional[dict[str, Any]]:
     """Return one bounded audio-chunk event at a time.
@@ -28,6 +29,7 @@ def render_live_recorder(
     return _live_recorder(
         ack_nonce=ack_nonce,
         theme_mode=theme,
+        note_id=note_id,
         default=None,
         key=key,
         tab_index=0,
